@@ -16,14 +16,14 @@ pub struct TimeZone {
     #[serde(rename="timeStartUtc",skip_serializing_if = "Option::is_none")]
     pub time_start_utc: Option<String>,
     #[serde(rename="gmtOffset")]
-    pub gmt_offset: i16,
+    pub gmt_offset: i32,
     pub dst: bool,
     #[serde(rename="timeEnd",skip_serializing_if = "Option::is_none")]
     pub time_end: Option<i64>,
     #[serde(rename="timeEndUtc",skip_serializing_if = "Option::is_none")]
     pub time_end_utc: Option<String>,
     #[serde(rename="nextGmtOffset",skip_serializing_if = "Option::is_none")]
-    pub next_gmt_offset: Option<i16>,
+    pub next_gmt_offset: Option<i32>,
     #[serde(rename="localDt",skip_serializing_if = "Option::is_none")]
     pub local_dt: Option<String>,
     #[serde(rename="refUnix",skip_serializing_if = "Option::is_none")]
@@ -31,20 +31,43 @@ pub struct TimeZone {
     #[serde(rename="refJd",skip_serializing_if = "Option::is_none")]
     pub ref_jd: Option<f64>,
     #[serde(rename="solarUtcOffset",skip_serializing_if = "Option::is_none")]
-    pub solar_utc_offset: Option<i16>,
+    pub solar_utc_offset: Option<i32>,
 }
 
 impl TimeZone {
-    pub fn new(zone_name: String, country_code: String, abbreviation: String, time_start: i64, gmt_offset: i16, dst: bool) -> TimeZone {
-      let time_start_utc = Some(unixtime_to_utc(time_start));
-      TimeZone { zone_name, country_code, abbreviation, time_start, time_start_utc, gmt_offset, dst, time_end: None, time_end_utc: None, next_gmt_offset: None, local_dt: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
-    }
+  pub fn new(zone_name: String, country_code: String, abbreviation: String, time_start: i64, gmt_offset: i32, dst: bool) -> TimeZone {
+    let time_start_utc = Some(unixtime_to_utc(time_start));
+    TimeZone { zone_name, country_code, abbreviation, time_start, time_start_utc, gmt_offset, dst, time_end: None, time_end_utc: None, next_gmt_offset: None, local_dt: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
+  }
 
-    pub fn add_end(&mut self, end_ts: i64, gmt_offset: i16) {
-        self.time_end = Some(end_ts);
-        self.next_gmt_offset = Some(gmt_offset);
-        self.time_end_utc = Some(unixtime_to_utc(end_ts));
+  pub fn new_ocean(name: String, lng: f64) -> TimeZone {
+    let solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
+    let gmt_offset_hours = natural_hours_offset_from_utc(lng);
+    let zone_name = format!("{}/{:02}", name, gmt_offset_hours);
+    let gmt_offset = gmt_offset_hours * 3600i32;
+    TimeZone { 
+      zone_name,
+      country_code: "".to_string(),
+      abbreviation: "".to_string(),
+      time_start: 0,
+      time_start_utc: None,
+      gmt_offset,
+      dst: false,
+      time_end: None,
+      time_end_utc: None,
+      next_gmt_offset: None,
+      local_dt: None,
+      ref_unix: None,
+      ref_jd: None,
+      solar_utc_offset
     }
+  }
+
+  pub fn add_end(&mut self, end_ts: i64, gmt_offset: i32) {
+      self.time_end = Some(end_ts);
+      self.next_gmt_offset = Some(gmt_offset);
+      self.time_end_utc = Some(unixtime_to_utc(end_ts));
+  }
 
   pub fn set_ref_time(&mut self, ref_ts: i64) {
     self.ref_unix = Some(ref_ts);

@@ -154,8 +154,27 @@ pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoTimeInfo {
   let placenames = fetch_extended_from_geonames(lat, lng).await;
   let mut time: Option<TimeZone> = None;
+  let mut time_matched = false;
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
+    if tz_item.tz.len() > 2 {
       time = match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng));
+      if let Some(time_row) = time.clone() {
+        time_matched = time_row.zone_name.len() > 2;
+      }
+    }
+  }
+  if !time_matched && placenames.len() > 0 {
+    if let Some(row) = placenames.get(0) {
+      let words: Vec<&str> = row.name.split(" ").collect();
+      let name_opt = words.into_iter().find(|s| match s.to_lowercase().as_str() {
+        "north" | "south" | "east" | "west" => false,
+        _ => true
+      });
+      if let Some(name) = name_opt {
+        time = Some(TimeZone::new_ocean(name.to_owned(), lng));
+      }
+      
+    }
   }
   GeoTimeInfo { 
     placenames,
