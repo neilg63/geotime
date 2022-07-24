@@ -28,6 +28,8 @@ pub fn match_datetime_from_params(params:&Query<InputOptions>) -> String {
     let un = params.un.clone().unwrap_or(min_unix_ts);
     if un > min_unix_ts && un <= max_unix_ts {
       dt_str = unixtime_to_utc(un);
+    } else {
+      dt_str = current_datetime_string();
     }
   }
   iso_string_to_datetime(dt_str.as_str()).to_string()

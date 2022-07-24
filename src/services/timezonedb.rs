@@ -30,12 +30,14 @@ pub struct TimeZone {
     pub ref_unix: Option<i64>,
     #[serde(rename="refJd",skip_serializing_if = "Option::is_none")]
     pub ref_jd: Option<f64>,
+    #[serde(rename="solarUtcOffset",skip_serializing_if = "Option::is_none")]
+    pub solar_utc_offset: Option<i16>,
 }
 
 impl TimeZone {
     pub fn new(zone_name: String, country_code: String, abbreviation: String, time_start: i64, gmt_offset: i16, dst: bool) -> TimeZone {
       let time_start_utc = Some(unixtime_to_utc(time_start));
-      TimeZone { zone_name, country_code, abbreviation, time_start, time_start_utc, gmt_offset, dst, time_end: None, time_end_utc: None, next_gmt_offset: None, local_dt: None, ref_unix: None, ref_jd: None }
+      TimeZone { zone_name, country_code, abbreviation, time_start, time_start_utc, gmt_offset, dst, time_end: None, time_end_utc: None, next_gmt_offset: None, local_dt: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
     }
 
     pub fn add_end(&mut self, end_ts: i64, gmt_offset: i16) {
@@ -44,10 +46,14 @@ impl TimeZone {
         self.time_end_utc = Some(unixtime_to_utc(end_ts));
     }
 
-    pub fn set_ref_time(&mut self, ref_ts: i64) {
-      self.ref_unix = Some(ref_ts);
-      self.ref_jd = Some(unixtime_to_julian_day(ref_ts));
-      self.local_dt = Some(unixtime_to_utc(ref_ts + self.gmt_offset as i64));
+  pub fn set_ref_time(&mut self, ref_ts: i64) {
+    self.ref_unix = Some(ref_ts);
+    self.ref_jd = Some(unixtime_to_julian_day(ref_ts));
+    self.local_dt = Some(unixtime_to_utc(ref_ts + self.gmt_offset as i64));
+  }
+
+  pub fn set_natural_offset(&mut self, lng: f64) {
+    self.solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
   }
 }
 
@@ -62,13 +68,16 @@ fn match_nextprev_time_zone(zn: &str, ts: i64, next: bool) -> Option<TimeZone> {
   fetch_time_zone_row(sql)
 }
 
-pub fn match_current_time_zone(zn: &str, date_str: &str) -> Option<TimeZone> {
+pub fn match_current_time_zone(zn: &str, date_str: &str, lng_opt: Option<f64>) -> Option<TimeZone> {
   let ts = match_unix_ts_from_fuzzy_datetime(date_str);
   if let Some(mut current) = match_nextprev_time_zone(zn, ts, false) { 
       if let Some(next) = match_nextprev_time_zone(zn, ts, true) {
           current.add_end(next.time_start, next.gmt_offset);
       }
       current.set_ref_time(ts);
+      if let Some(lng) = lng_opt {
+        current.set_natural_offset(lng);
+      }
       Some(current)
   } else {
       None

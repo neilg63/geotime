@@ -32,6 +32,20 @@ impl GeoNameRow {
             pop
         }
     }
+
+    pub fn new_ocean(row: Map<String, Value>, lat: f64, lng: f64) -> GeoNameRow {
+        let name = extract_string_from_value_map(&row, "name");
+        let toponym = extract_string_from_value_map(&row, "name");
+        let fcode = "OCEAN".to_string();
+        GeoNameRow { 
+            lng,
+            lat,
+            name,
+            toponym,
+            fcode,
+            pop: 0
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -116,6 +130,14 @@ pub async fn fetch_extended_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow>
               },
               _ => Vec::new(),
           };
+      } else if data.contains_key("ocean") {
+        rows = match &data["ocean"] {
+            Value::Object(row_map) => {
+                let new_row = GeoNameRow::new_ocean(row_map.clone(), lat, lng);
+                vec![new_row]
+            },
+            _ => vec![]
+        };
       }
   }
   rows
@@ -133,7 +155,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
   let placenames = fetch_extended_from_geonames(lat, lng).await;
   let mut time: Option<TimeZone> = None;
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
-      time = match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str());
+      time = match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng));
   }
   GeoTimeInfo { 
     placenames,
@@ -143,7 +165,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
 
 pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: String) -> Option<TimeZone> {
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
-      match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str())
+      match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng))
   } else {
     None
   }

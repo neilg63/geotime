@@ -106,3 +106,9 @@ pub fn match_unix_ts_from_fuzzy_datetime(date_str: &str) -> i64 {
   let ts = dt.timestamp();
   ts
 }
+
+pub fn natural_tz_offset_from_utc(lng: f64) -> i16 {
+  let lng360 = (lng + 540f64) % 360f64;
+  let lng180 = lng360 - 180f64;
+  (lng180 * 4f64 * 60f64).round() as i16
+}
