@@ -8,6 +8,7 @@ pub struct InputOptions {
   pub dt: Option<String>, // primary UTC date string
   pub dtl: Option<String>, // primary date string in local time (requires offset)
   pub jd: Option<f64>, // primary jd as a float
+  pub un: Option<i64>, // primary jd as a float
   pub zn: Option<String>, // comma-separated lat,lng(,alt) numeric string
   pub loc: Option<String>, // comma-separated lat,lng(,alt) numeric string
   pub place: Option<String>, // comma-separated lat,lng(,alt) numeric string
@@ -17,9 +18,17 @@ pub struct InputOptions {
 pub fn match_datetime_from_params(params:&Query<InputOptions>) -> String {
   let mut dt_str: String = params.dt.clone().unwrap_or("".to_string());
   let has_dt = dt_str.contains("-") && dt_str.len() > 6;
-  let jd = if has_dt { 0f64 } else { params.jd.clone().clone().unwrap_or(0f64) };
-  if jd > 2_000_000f64 { 
+  let jd = if has_dt { 0f64 } else { params.jd.clone().unwrap_or(0f64) };
+  let has_jd = jd > 2_000_000f64;
+  if has_jd {
     dt_str = julian_day_to_iso_datetime(jd);
+  } else if !has_dt {
+    let max_unix_ts = 4_000_000_000i64;
+    let min_unix_ts = -5_000_000_000i64;
+    let un = params.un.clone().unwrap_or(min_unix_ts);
+    if un > min_unix_ts && un <= max_unix_ts {
+      dt_str = unixtime_to_utc(un);
+    }
   }
   iso_string_to_datetime(dt_str.as_str()).to_string()
 }
