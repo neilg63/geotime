@@ -3,7 +3,7 @@
 This server application uses the open source time zone database and Geonames service to match any latitude, longitude and date since approximately 1920 with accurate time zone data for the time and place in history.
 
 ## Build instructions:
-You may use `cargo build (--release)` to build an executable for your operating system (all versions of Linux, Mac or Windows supported by Rust 1.61). This application requires MySQL or MariaDB. However, you will have to download and import the timezone database. 
+You may use `cargo build (--release)` to build an executable for your operating system (all versions of Linux, Mac or Windows supported by Rust 1.61). This application requires MySQL or MariaDB. However, you will have to download and import the database (TimeZoneDB.sql.zip) from the [Timezone DB site](https://timezonedb.com/download). 
 
 ```
 mysql> create database timezonedb;
