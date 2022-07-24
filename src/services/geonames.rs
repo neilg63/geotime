@@ -141,7 +141,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
   }
 }
 
-pub async fn fetch_ime_info_from_coords(lat: f64, lng: f64, utc_string: String) -> Option<TimeZone> {
+pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: String) -> Option<TimeZone> {
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
       match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str())
   } else {
