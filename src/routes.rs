@@ -14,8 +14,11 @@ pub async fn route_not_found() -> impl Responder {
 
 #[get("/geotime")]
 pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
-  let coord_str: String = params.loc.clone().unwrap_or("0,0".to_string());
-  let coords: Coords = loc_string_to_coords(coord_str.as_str());
+  let coords_option = match_coords_from_params(&params);
+  let coords = match coords_option {
+    Some(cs) => cs,
+    _ => Coords::zero()
+  };
   let corrected_dt = match_datetime_from_params(&params);
   let info = fetch_geo_time_info(coords.lat, coords.lng, corrected_dt).await;
   Json(json!(info))
@@ -25,14 +28,12 @@ pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
 pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let zn: String = params.zn.clone().unwrap_or("".to_string());
   let has_zn = zn.len() > 4 && zn.contains("/");
-  let coord_str: String = params.loc.clone().unwrap_or("".to_string());
-  let has_coords = coord_str.contains(",");
-  let coords: Coords = loc_string_to_coords(coord_str.as_str());
+  let coords_option = match_coords_from_params(&params);
   let corrected_dt = match_datetime_from_params(&params);
   let info = match has_zn {
     true => match_current_time_zone(zn.as_str(), corrected_dt.as_str()),
-    _ => match has_coords {
-        true => fetch_ime_info_from_coords(coords.lat, coords.lng, corrected_dt).await,
+    _ => match coords_option {
+        Some(coords) => fetch_time_info_from_coords(coords.lat, coords.lng, corrected_dt).await,
         _ => None
     }
   };  
