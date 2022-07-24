@@ -107,8 +107,13 @@ pub fn match_unix_ts_from_fuzzy_datetime(date_str: &str) -> i64 {
   ts
 }
 
-pub fn natural_tz_offset_from_utc(lng: f64) -> i16 {
+pub fn natural_tz_offset_from_utc(lng: f64) -> i32 {
   let lng360 = (lng + 540f64) % 360f64;
   let lng180 = lng360 - 180f64;
-  (lng180 * 4f64 * 60f64).round() as i16
+  (lng180 * 4f64 * 60f64) as i32
+}
+
+pub fn natural_hours_offset_from_utc(lng: f64) -> i32 {
+  let secs = if lng > 172.5f64 { 12i32 * 3600i32 } else { natural_tz_offset_from_utc(lng + 7.5f64) };
+  secs / 3600
 }
