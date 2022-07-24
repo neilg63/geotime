@@ -114,6 +114,6 @@ pub fn natural_tz_offset_from_utc(lng: f64) -> i32 {
 }
 
 pub fn natural_hours_offset_from_utc(lng: f64) -> i32 {
-  let secs = if lng > 172.5f64 { 12i32 * 3600i32 } else { natural_tz_offset_from_utc(lng + 7.5f64) };
+  let secs = if lng >= 172.5f64 { 12i32 * 3600i32 } else { natural_tz_offset_from_utc(lng + 7.5f64) };
   secs / 3600
 }
