@@ -1,7 +1,7 @@
 
 use serde::{Deserialize};
 use actix_web::{web::{Query}};
-use super::lib::date_conv::*;
+use super::lib::{date_conv::*, coords::*};
 
 #[derive(Deserialize)]
 pub struct InputOptions {
@@ -22,4 +22,14 @@ pub fn match_datetime_from_params(params:&Query<InputOptions>) -> String {
     dt_str = julian_day_to_iso_datetime(jd);
   }
   iso_string_to_datetime(dt_str.as_str()).to_string()
+}
+
+pub fn match_coords_from_params(params:&Query<InputOptions>) -> Option<Coords> {
+  let coord_str: String = params.loc.clone().unwrap_or("".to_string());
+  let has_coords = coord_str.contains(",");
+  if has_coords {
+    Some(loc_string_to_coords(coord_str.as_str()))
+  } else {
+    None
+  }
 }
