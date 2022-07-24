@@ -31,7 +31,7 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let coords_option = match_coords_from_params(&params);
   let corrected_dt = match_datetime_from_params(&params);
   let info = match has_zn {
-    true => match_current_time_zone(zn.as_str(), corrected_dt.as_str()),
+    true => match_current_time_zone(zn.as_str(), corrected_dt.as_str(), None),
     _ => match coords_option {
         Some(coords) => fetch_time_info_from_coords(coords.lat, coords.lng, corrected_dt).await,
         _ => None
