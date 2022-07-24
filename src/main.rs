@@ -20,12 +20,12 @@ async fn main()  -> std::io::Result<()> {
   
     let args = Args::parse();
     let port = args.webport as u16;
-
     HttpServer::new(move || {
         App::new()
         .route("/", web::get().to(welcome))
         .service(tz_info)
         .service(geo_time_info)
+        .route("/{sec1}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}/{sec3}", web::get().to(route_not_found))
   })
