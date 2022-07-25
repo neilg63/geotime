@@ -1,6 +1,6 @@
 use serde_json::*;
 
-pub fn extract_f64_value_map(row: &Map<String, Value>, key: &str) -> f64 {
+pub fn extract_f64_from_value_map(row: &Map<String, Value>, key: &str) -> f64 {
   match row.get(key) {
       Some(num_str_val) => match num_str_val {
           Value::String(num_str) =>  num_str.parse::<f64>().unwrap_or(0f64),
