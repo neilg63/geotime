@@ -17,8 +17,8 @@ pub struct GeoNameRow {
 
 impl GeoNameRow {
     pub fn new(row: Map<String, Value>) -> GeoNameRow {
-        let lng = extract_f64_value_map(&row, "lng");
-        let lat = extract_f64_value_map(&row, "lat");
+        let lng = extract_f64_from_value_map(&row, "lng");
+        let lat = extract_f64_from_value_map(&row, "lat");
         let name = extract_string_from_value_map(&row, "name");
         let toponym = extract_string_from_value_map(&row, "toponymName");
         let fcode = extract_string_from_value_map(&row, "fcode");
@@ -46,6 +46,63 @@ impl GeoNameRow {
             pop: 0
         }
     }
+
+    pub fn new_from_params(lat: f64, lng: f64, name: String, fcode: String, pop: u32) -> GeoNameRow {
+      GeoNameRow { 
+        lng,
+        lat,
+        name: name.clone(),
+        toponym: name,
+        fcode,
+        pop
+      }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeoNameNearby {
+    pub lng: f64,
+    pub lat: f64,
+    pub name: String,
+    pub toponym: String,
+    pub fcode: String,
+    pub distance: f64,
+    pub pop: u32,
+    pub admin_name: String,
+    pub country_name: String,
+}
+
+impl GeoNameNearby {
+  pub fn new(row: Map<String, Value>) -> GeoNameNearby {
+    let lng = extract_f64_from_value_map(&row, "lng");
+    let lat = extract_f64_from_value_map(&row, "lat");
+    let name = extract_string_from_value_map(&row, "name");
+    let admin_name = extract_string_from_value_map(&row, "adminName1");
+    let country_name = extract_string_from_value_map(&row, "countryName");
+    let toponym = extract_string_from_value_map(&row, "toponymName");
+    let fcode = extract_string_from_value_map(&row, "fcode");
+    let pop = extract_u32_from_value_map(&row, "population");
+    let distance = extract_f64_from_value_map(&row, "distance");
+    GeoNameNearby { 
+        lng,
+        lat,
+        name,
+        toponym,
+        fcode,
+        distance,
+        pop,
+        admin_name,
+        country_name,
+    }
+  }
+
+  pub fn to_rows(&self) -> Vec<GeoNameRow> {
+      let mut rows: Vec<GeoNameRow> = vec![];
+      rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.country_name.clone(), "PCLI".to_string(), 0));
+      rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), "ADM1".to_string(), 0));
+      rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.name.clone(), self.fcode.clone(), self.pop));
+      rows
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -131,13 +188,44 @@ pub async fn fetch_extended_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow>
               _ => Vec::new(),
           };
       } else if data.contains_key("ocean") {
-        rows = match &data["ocean"] {
-            Value::Object(row_map) => {
-                let new_row = GeoNameRow::new_ocean(row_map.clone(), lat, lng);
-                vec![new_row]
-            },
-            _ => vec![]
-        };
+        rows = fetch_nearby_from_geonames(lat, lng).await;
+        if rows.len() < 2 {
+          rows = match &data["ocean"] {
+              Value::Object(row_map) => {
+                  let new_row = GeoNameRow::new_ocean(row_map.clone(), lat, lng);
+                  vec![new_row]
+              },
+              _ => vec![]
+          };
+        }
+      }
+  }
+  rows
+}
+
+pub async fn fetch_nearby_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow> {
+  let output = fetch_from_geonames("findNearbyJSON", lat, lng).await;
+  let mut rows:Vec<GeoNameRow> = vec![];
+  if let Some(data) = output {
+      if data.contains_key("geonames") {
+          rows = match &data["geonames"] {
+              Value::Array(items) => {
+                  let mut new_rows: Vec<GeoNameRow> = vec![];
+                  for row in items {
+                      match row {
+                          Value::Object(row_map) => {
+                              let nearby_row = GeoNameNearby::new(row_map.clone());
+                              if nearby_row.distance <= GEONAMES_MAX_NEARBY_DISTANCE {
+                                  new_rows = nearby_row.to_rows();
+                              }
+                          },
+                          _ => ()
+                      }
+                  }
+                  new_rows
+              },
+              _ => Vec::new(),
+          };
       }
   }
   rows
@@ -151,11 +239,20 @@ pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> 
   }
 }
 
+pub fn extract_best_lat_lng_from_placenames(placenames: &Vec<GeoNameRow>, lat: f64, lng: f64) -> (f64, f64) {
+  if let Some(last_row) = placenames.last() {
+    (last_row.lat, last_row.lng)
+  } else {
+    (lat, lng)
+  }
+}
+
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoTimeInfo {
   let placenames = fetch_extended_from_geonames(lat, lng).await;
   let mut time: Option<TimeZone> = None;
   let mut time_matched = false;
-  if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
+  let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&placenames, lat, lng);
+  if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
     if tz_item.tz.len() > 2 {
       time = match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng));
       if let Some(time_row) = time.clone() {
