@@ -42,6 +42,21 @@ Query string parameters
 
 If no time can be matched, the current time will be used;
 
+#### Response:
+
+* abbreviation: 3 or 4 letter uppercase time zone abbreviation. However, their definition may change over time and a time zone region (see below) may switch time zones, change daylight saving rules or redefine its offset from UTC.
+* countryCode: 2-letter country code (NB: the code assigned some regions may be contested, e.g. Crimea)
+* dst: boolean true/false for daylight saving time or summer time
+* gmtOffset: seconds difference from UTC. These are usually rounded to the nearest hour (3600 seconds) and less commonly to the nearest half hour (India, South Australia) or quater hour (Nepal)
+localDt: The calculated local datetime string, assuming the original is UTC
+* refJd:	The calculated Julian day of the UTC date-time
+* refUnix:	The calculated unix time stamp
+* solarUtcOffset: The offset from UTC as it should be by longitude alone, ensuring noon or 12am is where the sun reaches its highest point.
+* timeStart: Unix time of the start of this time offset
+* timeStartUtc: UTC datetime of the start of this time offset
+* timeEnd: Unix time of the end of this time offset (if known)
+* timeEndUtc: UTC datetime of the end of this time offset (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
+
 ### GET geotime
 
 This shows the timezone, offsets and local time in various formats for the referenced location and date-time with related place names.
@@ -54,4 +69,9 @@ Query string parameters
 * un: Unix timestamp. Dates before midnight 1 Jan 1970 UTC are negative integers.
 * zn: Canonical zone name if known e.g. Asia/Kolkata or Europe/Amsterdam (this will skip a GeoNames lookup and maybe marginally faster)
 
-If no time can be matched, the current time will be used;
+If no time can be matched, the current time will be used.
+
+### Reponse
+
+* placenames: Set of related place name from country to locality level or ocean if out at sea.
+* time: As above with GET /timezone
