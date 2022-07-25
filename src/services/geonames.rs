@@ -140,19 +140,33 @@ fn match_geonames_username() -> String {
 
 pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map<String, Value>> {
   let url = format!("{}/{}", GEONAMES_API_BASE, method);
+  let lat_str = lat.to_string();
+  let lng_str = lng.to_string();
+  let uname = match_geonames_username();
   let client = reqwest::Client::new();
-  let result = client.get(url)
-      .query(
-      &[
-      ("username", match_geonames_username().as_str()),
-      ("lat", lat.to_string().as_str()),
-      ("lng", lng.to_string().as_str()),
-      ]
-  ).send()
-  .await
-  .expect("failed to get response")
-  .text()
-  .await;
+  let result = match method {
+    "findNearbyJSON" => client.get(url).query(&[
+        ("username", uname.as_str()),
+        ("lat", lat_str.as_str()),
+        ("lng", lng_str.as_str()),
+        ("featureClass", "P"),
+        ("radius", GEONAMES_MAX_NEARBY_DISTANCE.to_string().as_str())
+        ]).send()
+      .await
+      .expect("failed to get response")
+      .text()
+      .await
+    ,
+    _ => client.get(url).query(&[
+        ("username", uname.as_str()),
+        ("lat", lat_str.as_str()),
+        ("lng", lng_str.as_str()),
+      ]).send()
+        .await
+        .expect("failed to get response")
+        .text()
+        .await
+  };
   if let Ok(result_string) = result {
       let data: Map<String, Value> = serde_json::from_str(result_string.as_str()).unwrap();
       Some(data.clone())
@@ -234,7 +248,14 @@ pub async fn fetch_nearby_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow> {
 pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> {
   let data = fetch_from_geonames("timezoneJSON", lat, lng).await;
   match data {
-      Some(item_data) => Some(TimeZoneInfo::new(item_data)),
+      Some(item_data) => {
+        let tz_data = TimeZoneInfo::new(item_data);
+        if tz_data.tz.len() > 3 {
+          Some(tz_data)
+        } else {
+          None
+        }
+      },
       _ => None
   }
 }
@@ -245,6 +266,21 @@ pub fn extract_best_lat_lng_from_placenames(placenames: &Vec<GeoNameRow>, lat: f
   } else {
     (lat, lng)
   }
+}
+
+pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64) -> Option<TimeZone> {
+  let mut time: Option<TimeZone> = None;
+  if let Some(row) = placenames.get(0) {
+    let words: Vec<&str> = row.name.split(" ").collect();
+    let name_opt = words.into_iter().find(|s| match s.to_lowercase().as_str() {
+      "north" | "south" | "east" | "west" => false,
+      _ => true
+    });
+    if let Some(name) = name_opt {
+      time = Some(TimeZone::new_ocean(name.to_owned(), lng));
+    }
+  }
+  time
 }
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoTimeInfo {
@@ -261,17 +297,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
     }
   }
   if !time_matched && placenames.len() > 0 {
-    if let Some(row) = placenames.get(0) {
-      let words: Vec<&str> = row.name.split(" ").collect();
-      let name_opt = words.into_iter().find(|s| match s.to_lowercase().as_str() {
-        "north" | "south" | "east" | "west" => false,
-        _ => true
-      });
-      if let Some(name) = name_opt {
-        time = Some(TimeZone::new_ocean(name.to_owned(), lng));
-      }
-      
-    }
+    time = extract_time_from_first_row(&placenames, lng);
   }
   GeoTimeInfo { 
     placenames,
@@ -283,6 +309,20 @@ pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: String)
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
       match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng))
   } else {
-    None
+    let rows = fetch_nearby_from_geonames(lat, lng).await;
+    if rows.len() > 0 {
+      let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&rows, lat, lng);
+      if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
+          match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(best_lng))
+      } else {
+        extract_time_from_first_row(&rows, lng)
+      }
+    } else {
+      let data = fetch_geo_time_info(lat, lng, utc_string).await;
+      match data.time {
+        Some(time) => Some(time),
+        _ => None
+      }
+    }
   }
 }
