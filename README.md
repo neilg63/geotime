@@ -40,7 +40,7 @@ Query string parameters
 * jd: Decimal julian day as an alternative to datetime
 * un: Unix timestamp. Dates before midnight 1 Jan 1970 UTC are negative integers. 
 
-If no time can be matched, the current time will be used;
+The current time will be used if none is specified.
 
 #### Response:
 
