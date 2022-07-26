@@ -1,5 +1,4 @@
 use mysql::*;
-use mysql::prelude::*;
 use clap::Parser;
 use super::super::args::*;
 
