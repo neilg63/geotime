@@ -3,7 +3,7 @@ use chrono::{NaiveDateTime};
 pub enum JulianDayEpoch {
   Days = 2440587, // ref year in julian days
   Hours = 12, // ref hours in addition to ref years, 12 hours = 0.5 days
-  RefYear = 1970, // ref year at 1 Jan 00:00:00 UTC for conversion from unix time
+  //RefYear = 1970, // ref year at 1 Jan 00:00:00 UTC for conversion from unix time
 }
 
 impl JulianDayEpoch {
@@ -57,9 +57,9 @@ pub fn unixtime_to_julian_day(ts: i64) -> f64 {
   (ts as f64 / 86_400f64) + JulianDayEpoch::days_unix()
 }
 
-pub fn datetime_to_julian_day(dt: &str) -> f64 {
+/* pub fn datetime_to_julian_day(dt: &str) -> f64 {
   unixtime_to_julian_day(iso_string_to_datetime(dt).timestamp())
-}
+} */
 
 pub fn julian_day_to_unixtime(jd: f64) -> i64 {
   ((jd - JulianDayEpoch::days_unix() as f64) * 86400f64) as i64
@@ -94,6 +94,10 @@ pub fn julian_day_to_iso_datetime(jd: f64) -> String {
 
 pub fn current_datetime_string() -> String {
   unixtime_to_utc(chrono::offset::Utc::now().timestamp())
+}
+
+pub fn current_timestamp() -> i64 {
+  chrono::offset::Utc::now().timestamp()
 }
 
 pub fn match_unix_ts_from_fuzzy_datetime(date_str: &str) -> i64 {
