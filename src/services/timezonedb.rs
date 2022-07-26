@@ -2,6 +2,7 @@ use serde::{Serialize, Deserialize};
 use mysql::prelude::*;
 use super::super::data::mysql::*;
 use super::super::lib::date_conv::*;
+use chrono::{Datelike};
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -81,7 +82,17 @@ impl TimeZone {
   }
 }
 
-
+fn build_natural_timezone(zn: &str, date_str: &str, lng: f64, cc: String) -> Option<TimeZone>{
+  let dt = iso_string_to_datetime(date_str);
+  let year = dt.year();
+  let is_before_1900 = year < 1900i32;
+  let abbr = if is_before_1900 { "SOL" } else { "LOC" };
+  let solar_utc_offset = natural_tz_offset_from_utc(lng);
+  let gmt_offset_hours = if is_before_1900 {solar_utc_offset } else { natural_hours_offset_from_utc(lng) };
+  let mut tz_info = TimeZone::new(zn.to_string(), cc, abbr.to_string(), dt.timestamp(), gmt_offset_hours, false );
+  tz_info.set_natural_offset(lng);
+  Some(tz_info)
+}
 
 fn match_nextprev_time_zone(zn: &str, ts: i64, next: bool) -> Option<TimeZone> {
   let comparator = if next { ">"} else { "<=" };
@@ -104,7 +115,15 @@ pub fn match_current_time_zone(zn: &str, date_str: &str, lng_opt: Option<f64>) -
       }
       Some(current)
   } else {
+    if let Some(lng) = lng_opt {
+      let mut cc = "-".to_owned();
+      if let Some(current) = match_nextprev_time_zone(zn, current_timestamp(), false) {
+        cc = current.country_code;
+      }
+      build_natural_timezone(zn, date_str, lng, cc)
+    } else {
       None
+    }
   }
 }
 
