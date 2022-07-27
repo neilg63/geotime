@@ -25,7 +25,7 @@ mysql -u timezonedb -pmy_cryptic_password timezonedb < time_zone.sql
 * -h: MySQL Host, default 127.0.0.1
 * -P: MySQL Port number default 3306
 * -w: Web port for the server
-* -g: Geonames user name. NB. This is free.
+* -g: [Geonames user name](https://www.geonames.org/login). NB. This is free.
 
 ## Endpoints
 
@@ -52,10 +52,10 @@ localDt: The calculated local datetime string, assuming the original is UTC
 * refJd:	The calculated Julian day of the UTC date-time
 * refUnix:	The calculated unix time stamp
 * solarUtcOffset: The offset from UTC as it should be by longitude alone, ensuring noon or 12am is where the sun reaches its highest point.
-* timeStart: Unix time of the start of this time offset
-* timeStartUtc: UTC datetime of the start of this time offset
-* timeEnd: Unix time of the end of this time offset (if known)
-* timeEndUtc: UTC datetime of the end of this time offset (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
+* timeStart: Start of this time offset as a unix timestamp
+* timeStartUtc: Time offset start as as UTC date-time string
+* timeEnd: Eend of this time offset as a unix timestamp (if known)
+* timeEndUtc: Time offset end as as UTC date-time string (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
 
 ### GET geotime
 
