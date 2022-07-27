@@ -44,7 +44,9 @@ impl TimeZone {
   pub fn new_ocean(name: String, lng: f64) -> TimeZone {
     let solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
     let gmt_offset_hours = natural_hours_offset_from_utc(lng);
-    let zone_name = format!("{}/{:02}", name, gmt_offset_hours);
+    let letter = if gmt_offset_hours < 0 { "W" } else { "E" };
+    let hours = gmt_offset_hours.abs();
+    let zone_name = format!("{}/{:02}{}", name, hours, letter);
     let gmt_offset = gmt_offset_hours * 3600i32;
     println!("{}, {}, {}", gmt_offset_hours, gmt_offset, lng);
     TimeZone { 
