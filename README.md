@@ -17,14 +17,14 @@ mysql -u timezonedb -pmy_cryptic_password timezonedb < time_zone.sql
 ```
 
 
-## Commad line parameters
+## Command line parameters
 
 * -d: MySQL database name, default: timezonedb (table name time_zone)
 * -u: MySQL user name, default: timezonedb
 * -p: MySQL password, default: password. Must be configured
 * -h: MySQL Host, default 127.0.0.1
 * -P: MySQL Port number default 3306
-* -w: Web port for the server
+* -w: Web port for the server, default: 8089
 * -g: [Geonames user name](https://www.geonames.org/login). NB. This is free.
 
 ## Endpoints
@@ -44,6 +44,7 @@ The current time will be used if none is specified.
 
 #### Response:
 
+* zoneName: *Continent|Sea|Ocean/City|Segment* 
 * abbreviation: 3 or 4 letter uppercase time zone abbreviation. However, their definition may change over time and a time zone region (see below) may switch time zones, change daylight saving rules or redefine the offset from UTC. When unmatched, "SOL" means solar time to the nearest second and "LOC" stands for standardised longitude-based local time to the nearest hour.
 * countryCode: 2-letter country code (NB: the code assigned to some regions may be contested, e.g. Crimea, or reflect current geopolitcial boundaries rather than those valid at the time)
 * dst: boolean true/false for daylight saving time or summer time
