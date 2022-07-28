@@ -48,7 +48,6 @@ impl TimeZone {
     let hours = gmt_offset_hours.abs();
     let zone_name = format!("{}/{:02}{}", name, hours, letter);
     let gmt_offset = gmt_offset_hours * 3600i32;
-    println!("{}, {}, {}", gmt_offset_hours, gmt_offset, lng);
     TimeZone { 
       zone_name,
       country_code: "".to_string(),

@@ -3,7 +3,7 @@ use serde_json::*;
 use clap::Parser;
 use super::super::args::*;
 use super::timezonedb::*;
-use super::super::{constants::*, lib::json_extract::*};
+use super::super::{constants::*, lib::json_extract::*, lib::cached_http_client::*};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeoNameRow {
@@ -143,7 +143,8 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
   let lat_str = lat.to_string();
   let lng_str = lng.to_string();
   let uname = match_geonames_username();
-  let client = reqwest::Client::new();
+  //let client = reqwest::Client::new();
+  let client = get_cached_http_client();
   let result = match method {
     "findNearbyJSON" => client.get(url).query(&[
         ("username", uname.as_str()),
