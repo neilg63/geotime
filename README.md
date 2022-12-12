@@ -18,7 +18,22 @@ Exit the mysql prompt and import the SQL file as follows:
 mysql -u timezonedb -pmy_cryptic_password timezonedb < time_zone.sql
 ```
 
+## Environment Variables
+
+The application will pick up a .env file in the launch directory, which is assumed to be the project root where the executable is at target/release/geotimezone.
+
+- port: Web server port number, default 8809
+- db_name: database name, default timezonedb
+- db_user: database user name, default timezonedb
+- db_pass= database password, default password (not use this)
+- db_port: database port, default 3306.
+- db_host: database host "127.0.0.1"
+- geonames_user_name: registered GeoNames name, default demo (only temporary). [Geonames user name](https://www.geonames.org/login). NB. This is free..
+- max_nearby_radius: Kilometers from nearest continental area with an official timezone, default 240. Only used for locations at sea.
+
 ## Command line parameters
+
+These will override the above.
 
 - -d: MySQL database name, default: timezonedb (table name time_zone)
 - -u: MySQL user name, default: timezonedb
