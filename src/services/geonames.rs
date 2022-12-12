@@ -134,7 +134,21 @@ fn match_geonames_username() -> String {
   if un.len() > 2 {
     un
   } else {
-    GEONAMES_USERNAME_DEFAULT.to_owned()
+    dotenv::var("geonames_username").unwrap_or(GEONAMES_USERNAME_DEFAULT.to_owned())
+  }
+}
+
+fn match_max_nearby_radius() -> String {
+  let def_string_val = GEONAMES_MAX_NEARBY_DISTANCE.to_string();
+  let radius_ref = dotenv::var("max_nearby_radius").unwrap_or(def_string_val.clone());
+  if let Ok(radius) = radius_ref.parse::<f64>() {
+    if radius >= 0f64 {
+      radius_ref
+    } else {
+      def_string_val
+    }
+  } else {
+    def_string_val
   }
 }
 
@@ -151,7 +165,7 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
         ("lat", lat_str.as_str()),
         ("lng", lng_str.as_str()),
         ("featureClass", "P"),
-        ("radius", GEONAMES_MAX_NEARBY_DISTANCE.to_string().as_str())
+        ("radius", match_max_nearby_radius().as_str())
         ]).send()
       .await
       .expect("failed to get response")

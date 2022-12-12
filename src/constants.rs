@@ -7,3 +7,4 @@ pub const MYSQL_PASS_DEFAULT: &str = "password";
 pub const GEONAMES_USERNAME_DEFAULT: &str = "demo";
 pub const GEONAMES_API_BASE: &str = "http://api.geonames.org";
 pub const GEONAMES_MAX_NEARBY_DISTANCE: f64 = 240f64;
+pub const DEFAULT_WEB_PORT: u16 = 8089;

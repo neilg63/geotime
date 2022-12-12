@@ -15,11 +15,24 @@ use clap::Parser;
 use actix_web::{App, HttpServer, web::{self}};
 use routes::*;
 
+fn match_port() -> u16 {
+  let args = Args::parse();
+  let mut port = args.webport as u16;
+  if port < 1 {
+    let env_port = dotenv::var("port").unwrap_or(format!("{:04}", constants::DEFAULT_WEB_PORT));
+    if let Ok(port_num) = env_port.parse::<u16>() {
+      if port_num > 0 {
+        port = port_num;
+      }
+    }
+  }
+  port
+}
+
 #[actix_web::main]
 async fn main()  -> std::io::Result<()> {
-  
-    let args = Args::parse();
-    let port = args.webport as u16;
+    let port = match_port();
+    
     HttpServer::new(move || {
         App::new()
         .route("/", web::get().to(welcome))
