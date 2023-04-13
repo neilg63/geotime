@@ -72,6 +72,7 @@ The current time will be used if none is specified.
 - solarUtcOffset: The offset from UTC as it should be by longitude alone, ensuring noon or 12am is where the sun reaches its highest point.
 - period.start: Start of this time offset as a unix timestamp (if known)
 - period.startUtc: Time offset start as as UTC date-time string (if known)
+- period.nextGmtOffset: The next gmt offset in seconds at the end of the current period
 - period.end: End of this time offset as a unix timestamp (if known)
 - period.endUtc: Time offset end as as UTC date-time string (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
 - weekDay.abbr: Three-letter English abbreviation of the local week day
