@@ -65,14 +65,18 @@ The current time will be used if none is specified.
 - countryCode: 2-letter country code (NB: the code assigned to some regions may be contested, e.g. Crimea, or reflect current geopolitcial boundaries rather than those valid at the time)
 - dst: boolean true/false for daylight saving time or summer time
 - gmtOffset: seconds difference from UTC. These are usually rounded to the nearest hour (3600 seconds) and less commonly to the nearest half hour (India, South Australia) or quater hour (Nepal)
-  localDt: The calculated local datetime string, assuming the original is UTC
+- localDt: The calculated local datetime string
+- utc: The calculated UTC datetime string
 - refJd: The calculated Julian day of the UTC date-time
 - refUnix: The calculated unix time stamp
 - solarUtcOffset: The offset from UTC as it should be by longitude alone, ensuring noon or 12am is where the sun reaches its highest point.
-- timeStart: Start of this time offset as a unix timestamp
-- timeStartUtc: Time offset start as as UTC date-time string
-- timeEnd: Eend of this time offset as a unix timestamp (if known)
-- timeEndUtc: Time offset end as as UTC date-time string (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
+- period.start: Start of this time offset as a unix timestamp (if known)
+- period.startUtc: Time offset start as as UTC date-time string (if known)
+- period.end: End of this time offset as a unix timestamp (if known)
+- period.endUtc: Time offset end as as UTC date-time string (if known). For regions that do not apply summer time (daylight saving), the time offset is assumed to remain the same until further notice.
+- weekDay.abbr: Three-letter English abbreviation of the local week day
+- weekDay.iso: ISO day of the week, where 1 = Monday and 7 = Sunday
+- weekDay.sun: Alternative weekday number where Sunday = 1 and Saturday = 7 (common in the Americas and India)
 
 ### GET geotime
 
