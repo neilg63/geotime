@@ -1,5 +1,7 @@
 use serde::{Serialize, Deserialize};
 use mysql::prelude::*;
+use crate::lib::weekday_code::WeekdayCode;
+
 use super::super::data::mysql::*;
 use super::super::lib::date_conv::*;
 use chrono::{Datelike};
@@ -12,21 +14,16 @@ pub struct TimeZone {
     #[serde(rename="countryCode")]
     pub country_code: String,
     pub abbreviation: String,
-    #[serde(rename="timeStart")]
-    pub time_start: i64,
-    #[serde(rename="timeStartUtc",skip_serializing_if = "Option::is_none")]
-    pub time_start_utc: Option<String>,
     #[serde(rename="gmtOffset")]
     pub gmt_offset: i32,
     pub dst: bool,
-    #[serde(rename="timeEnd",skip_serializing_if = "Option::is_none")]
-    pub time_end: Option<i64>,
-    #[serde(rename="timeEndUtc",skip_serializing_if = "Option::is_none")]
-    pub time_end_utc: Option<String>,
-    #[serde(rename="nextGmtOffset",skip_serializing_if = "Option::is_none")]
-    pub next_gmt_offset: Option<i32>,
     #[serde(rename="localDt",skip_serializing_if = "Option::is_none")]
     pub local_dt: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub utc: Option<String>,
+    pub period: TimeZonePeriod,
+    #[serde(rename="weekDay",skip_serializing_if = "Option::is_none")]
+    pub week_day: Option<WeekdayCode>,
     #[serde(rename="refUnix",skip_serializing_if = "Option::is_none")]
     pub ref_unix: Option<i64>,
     #[serde(rename="refJd",skip_serializing_if = "Option::is_none")]
@@ -37,8 +34,8 @@ pub struct TimeZone {
 
 impl TimeZone {
   pub fn new(zone_name: String, country_code: String, abbreviation: String, time_start: i64, gmt_offset: i32, dst: bool) -> TimeZone {
-    let time_start_utc = Some(unixtime_to_utc(time_start));
-    TimeZone { zone_name, country_code, abbreviation, time_start, time_start_utc, gmt_offset, dst, time_end: None, time_end_utc: None, next_gmt_offset: None, local_dt: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
+    let period = TimeZonePeriod::new(time_start, None, None);
+    TimeZone { zone_name, country_code, abbreviation, gmt_offset, dst, local_dt: None, utc: None, period, week_day: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
   }
 
   pub fn new_ocean(name: String, lng: f64) -> TimeZone {
@@ -52,14 +49,12 @@ impl TimeZone {
       zone_name,
       country_code: "".to_string(),
       abbreviation: "".to_string(),
-      time_start: 0,
-      time_start_utc: None,
       gmt_offset,
       dst: false,
-      time_end: None,
-      time_end_utc: None,
-      next_gmt_offset: None,
       local_dt: None,
+      utc: None,
+      period: TimeZonePeriod::empty(),
+      week_day: None,
       ref_unix: None,
       ref_jd: None,
       solar_utc_offset
@@ -67,20 +62,71 @@ impl TimeZone {
   }
 
   pub fn add_end(&mut self, end_ts: i64, gmt_offset: i32) {
-      self.time_end = Some(end_ts);
-      self.next_gmt_offset = Some(gmt_offset);
-      self.time_end_utc = Some(unixtime_to_utc(end_ts));
+    if let Some(start) = self.period.start {
+      self.period = TimeZonePeriod::new(start, Some(gmt_offset), Some(end_ts));
+    }
+  }
+
+  pub fn time_start(&self) -> i64 {
+    if let Some(start) =  self.period.start {
+        start
+    } else {
+      i64::MIN
+    }
   }
 
   pub fn set_ref_time(&mut self, ref_ts: i64) {
     self.ref_unix = Some(ref_ts);
     self.ref_jd = Some(unixtime_to_julian_day(ref_ts));
-    self.local_dt = Some(unixtime_to_utc(ref_ts + self.gmt_offset as i64));
+    let local_unix_ts = ref_ts + self.gmt_offset as i64;
+    self.local_dt = Some(unixtime_to_utc(local_unix_ts));
+    self.utc = Some(unixtime_to_utc(ref_ts));
+    self.week_day = Some(unixtime_to_weekday(local_unix_ts));
   }
 
   pub fn set_natural_offset(&mut self, lng: f64) {
     self.solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
   }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct TimeZonePeriod {
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub start: Option<i64>,
+  #[serde(rename="startUtc")]
+  pub start_utc: Option<String>,
+  #[serde(rename="nextGmtOffset")]
+  pub next_gmt_offset: Option<i32>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub end: Option<i64>,
+  #[serde(rename="endUtc",skip_serializing_if = "Option::is_none")]
+  pub end_utc: Option<String>,
+}
+
+impl TimeZonePeriod {
+  pub fn new(start_ts: i64, next_offset: Option<i32>, end: Option<i64>) -> TimeZonePeriod {
+    let start_utc = Some(unixtime_to_utc(start_ts));
+    let has_end = end.is_some();
+    let end_utc = if has_end { Some(unixtime_to_utc(end.unwrap())) } else { None };
+    TimeZonePeriod {
+      start: Some(start_ts),
+      start_utc,
+      next_gmt_offset: next_offset,
+      end,
+      end_utc,
+    }
+  }
+
+  pub fn empty() -> TimeZonePeriod {
+    TimeZonePeriod {
+      start: None,
+      start_utc: None,
+      next_gmt_offset: None,
+      end: None,
+      end_utc: None,
+    }
+  }
+
 }
 
 fn build_natural_timezone(zn: &str, date_str: &str, lng: f64, cc: String) -> Option<TimeZone>{
@@ -108,7 +154,7 @@ pub fn match_current_time_zone(zn: &str, date_str: &str, lng_opt: Option<f64>) -
   let ts = match_unix_ts_from_fuzzy_datetime(date_str);
   if let Some(mut current) = match_nextprev_time_zone(zn, ts, false) { 
       if let Some(next) = match_nextprev_time_zone(zn, ts, true) {
-          current.add_end(next.time_start, next.gmt_offset);
+          current.add_end(next.time_start(), next.gmt_offset);
       }
       current.set_ref_time(ts);
       if let Some(lng) = lng_opt {

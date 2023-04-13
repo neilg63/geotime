@@ -1,6 +1,8 @@
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
+use crate::lib::date_conv::unixtime_to_utc;
+
 use super::super::args::*;
 use super::timezonedb::*;
 use super::super::{constants::*, lib::json_extract::*, lib::cached_http_client::*};
@@ -303,9 +305,10 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
   let mut time: Option<TimeZone> = None;
   let mut time_matched = false;
   let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&placenames, lat, lng);
+
   if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
     if tz_item.tz.len() > 2 {
-      time = match_current_time_zone(tz_item.tz.as_str(), utc_string.as_str(), Some(lng));
+      time = match_current_time_zone(tz_item.tz.as_str(), &utc_string, Some(lng));
       if let Some(time_row) = time.clone() {
         time_matched = time_row.zone_name.len() > 2;
       }
@@ -317,6 +320,40 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: String) -> GeoT
   GeoTimeInfo { 
     placenames,
     time
+  }
+}
+
+pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str) -> String {
+  let mut adjusted_dt = utc_string.to_owned();
+  if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, adjusted_dt.clone()).await {
+    if let Some(unix_ts) = tz_info.ref_unix {
+      let adjusted_unix_time = unix_ts - tz_info.gmt_offset as i64;
+      adjusted_dt = unixtime_to_utc(adjusted_unix_time);
+    }
+  }
+  adjusted_dt
+}
+
+pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: String, local: bool) -> Option<TimeZone> {
+  if local {
+    if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string).await {
+      if let Some(unix_ts) = tz_info.ref_unix {
+        let adjusted_unix_time = unix_ts - tz_info.gmt_offset as i64;
+        println!("{}, {}", unix_ts, adjusted_unix_time);
+        if tz_info.gmt_offset != 0 {
+          let adjust_dt_str = unixtime_to_utc(adjusted_unix_time);
+          fetch_time_info_from_coords(lat, lng, adjust_dt_str).await
+        } else {
+          Some(tz_info)
+        }
+      } else {
+        None
+      }
+    } else {
+      None
+    }
+  } else {
+    fetch_time_info_from_coords(lat, lng, utc_string).await
   }
 }
 

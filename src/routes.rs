@@ -1,3 +1,5 @@
+use crate::lib::date_conv::unixtime_to_utc;
+
 use super::services::{timezonedb::*, geonames::*};
 use serde_json::*;
 use actix_web::{get, Responder, web::{Query, Json}};
@@ -19,8 +21,9 @@ pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
     Some(cs) => cs,
     _ => Coords::zero()
   };
-  let corrected_dt = match_datetime_from_params(&params);
-  let info = fetch_geo_time_info(coords.lat, coords.lng, corrected_dt).await;
+  let (corrected_dt, local) = match_datetime_from_params(&params);
+  let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt).await } else { corrected_dt };
+  let info = fetch_geo_time_info(coords.lat, coords.lng, adjusted_dt).await;
   Json(json!(info))
 }
 
@@ -29,11 +32,11 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let zn: String = params.zn.clone().unwrap_or("".to_string());
   let has_zn = zn.len() > 4 && zn.contains("/");
   let coords_option = match_coords_from_params(&params);
-  let corrected_dt = match_datetime_from_params(&params);
+  let (corrected_dt, local) = match_datetime_from_params(&params);
   let info = match has_zn {
     true => match_current_time_zone(zn.as_str(), corrected_dt.as_str(), None),
     _ => match coords_option {
-        Some(coords) => fetch_time_info_from_coords(coords.lat, coords.lng, corrected_dt).await,
+        Some(coords) => fetch_time_info_from_coords_local(coords.lat, coords.lng, corrected_dt, local).await,
         _ => None
     }
   };  

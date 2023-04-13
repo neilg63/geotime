@@ -1,3 +1,4 @@
+use crate::lib::weekday_code::WeekdayCode;
 use chrono::{NaiveDateTime};
 
 pub enum JulianDayEpoch {
@@ -52,6 +53,28 @@ pub fn iso_string_to_datetime(dt: &str) -> NaiveDateTime {
 pub fn unixtime_to_utc(ts: i64) -> String {
   NaiveDateTime::from_timestamp(ts, 0).format("%Y-%m-%dT%H:%M:%S").to_string()
 }
+
+/*
+  Convert the current unixtime to julian days
+*/
+pub fn unixtime_to_weekday(ts: i64) -> WeekdayCode {
+  let day_ref = NaiveDateTime::from_timestamp(ts, 0).format("%u/%a").to_string();
+  let parts = day_ref.split("/").collect::<Vec<_>>();
+  let mut abbr = "";
+  let mut iso = 0u8;
+  if parts.len() > 1 {
+    if let Some(num_str) = parts.get(0) {
+      if let Ok(num) = num_str.parse::<u8>() {
+        iso = num;
+      }
+    }
+    if let Some(abbr_str) = parts.get(1) {
+      abbr = abbr_str;
+    }
+  }
+  WeekdayCode::new(iso, abbr)
+}
+
 
 pub fn unixtime_to_julian_day(ts: i64) -> f64 {
   (ts as f64 / 86_400f64) + JulianDayEpoch::days_unix()
