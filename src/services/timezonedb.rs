@@ -49,6 +49,7 @@ impl TimeZone {
     let utc = Some(unixtime_to_utc(unix_ts));
     let adjusted_unix_ts = unix_ts + gmt_offset as i64;
     let local_dt = Some(unixtime_to_utc(adjusted_unix_ts));
+    let week_day = Some(unixtime_to_weekday(adjusted_unix_ts));
     TimeZone { 
       zone_name,
       country_code: "".to_string(),
@@ -58,7 +59,7 @@ impl TimeZone {
       local_dt,
       utc,
       period: TimeZonePeriod::empty(),
-      week_day: None,
+      week_day,
       ref_unix,
       ref_jd: None,
       solar_utc_offset
