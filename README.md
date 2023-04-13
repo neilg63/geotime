@@ -82,6 +82,7 @@ Query string parameters
 
 - loc: Comma-separated decimal latitude and longitude
 - dt: UTC date or date-time as yyyy-mm-dd (2000-01-01) or yyyy-mm-ddTHH:MM:SS (2000-01-01T12:00:00) with optional seconds
+- dtl: Local date or date-time expressed as yyyy-mm-dd (2000-01-01) or yyyy-mm-ddTHH:MM:SS (2000-01-01T12:00:00) with optional seconds
 - jd: Decimal julian day as an alternative to datetime
 - un: Unix timestamp. Dates before midnight 1 Jan 1970 UTC are negative integers.
 - zn: Canonical zone name if known e.g. Asia/Kolkata or Europe/Amsterdam (this will avoid an extra GeoNames lookup and may be marginally faster)

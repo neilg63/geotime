@@ -1,9 +1,8 @@
 use serde::{Serialize, Deserialize};
 use mysql::prelude::*;
 use crate::lib::weekday_code::WeekdayCode;
-
-use super::super::data::mysql::*;
-use super::super::lib::date_conv::*;
+use crate::data::mysql::*;
+use crate::lib::date_conv::*;
 use chrono::{Datelike};
 
 
@@ -38,28 +37,34 @@ impl TimeZone {
     TimeZone { zone_name, country_code, abbreviation, gmt_offset, dst, local_dt: None, utc: None, period, week_day: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
   }
 
-  pub fn new_ocean(name: String, lng: f64) -> TimeZone {
+  pub fn new_ocean(name: &str, lng: f64, date_str: &str) -> TimeZone {
     let solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
     let gmt_offset_hours = natural_hours_offset_from_utc(lng);
     let letter = if lng < 0f64 { "W" } else { "E" };
     let hours = gmt_offset_hours.abs();
     let zone_name = format!("{}/{:02}{}", name, hours, letter);
     let gmt_offset = gmt_offset_hours * 3600i32;
+    let unix_ts = iso_string_to_datetime(date_str).timestamp();
+    let ref_unix = Some(unix_ts);
+    let utc = Some(unixtime_to_utc(unix_ts));
+    let adjusted_unix_ts = unix_ts + gmt_offset as i64;
+    let local_dt = Some(unixtime_to_utc(adjusted_unix_ts));
     TimeZone { 
       zone_name,
       country_code: "".to_string(),
       abbreviation: "".to_string(),
       gmt_offset,
       dst: false,
-      local_dt: None,
-      utc: None,
+      local_dt,
+      utc,
       period: TimeZonePeriod::empty(),
       week_day: None,
-      ref_unix: None,
+      ref_unix,
       ref_jd: None,
       solar_utc_offset
     }
   }
+
 
   pub fn add_end(&mut self, end_ts: i64, gmt_offset: i32) {
     if let Some(start) = self.period.start {
@@ -93,9 +98,9 @@ impl TimeZone {
 pub struct TimeZonePeriod {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub start: Option<i64>,
-  #[serde(rename="startUtc")]
+  #[serde(rename="startUtc",skip_serializing_if = "Option::is_none")]
   pub start_utc: Option<String>,
-  #[serde(rename="nextGmtOffset")]
+  #[serde(rename="nextGmtOffset", skip_serializing_if = "Option::is_none")]
   pub next_gmt_offset: Option<i32>,
   #[serde(skip_serializing_if = "Option::is_none")]
   pub end: Option<i64>,

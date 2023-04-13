@@ -49,7 +49,7 @@ pub fn match_coords_from_params(params:&Query<InputOptions>) -> Option<Coords> {
   let coord_str: String = params.loc.clone().unwrap_or("".to_string());
   let has_coords = coord_str.contains(",");
   if has_coords {
-    Some(loc_string_to_coords(coord_str.as_str()))
+    Some(loc_string_to_coords(&coord_str))
   } else {
     None
   }
