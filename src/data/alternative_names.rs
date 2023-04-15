@@ -6,7 +6,7 @@
 * but sometimes is only available in international English even if the variant is common locally. 
 * This lookup set serves only for post-filtering as geonames usually picks up such variants from the search query, 
 * but does not include them in the results, e.f. q=Madras will match Chennai, 
-* but this will not be in the results for capital of Tamil Nadu.
+* but this will not appear in the results for capital of Tamil Nadu.
 * Should this data set grow beyond a few hundred entries, it should be migrated to a full database.
 */
 pub const ALTERNATIVE_NAMES: [(&'static str, &'static str); 11] = [
