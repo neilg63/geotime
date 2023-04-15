@@ -213,11 +213,11 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
   let client = get_cached_http_client();
   let result = match method {
     "findNearbyJSON" => client.get(url).query(&[
-        ("username", uname.as_str()),
-        ("lat", lat_str.as_str()),
-        ("lng", lng_str.as_str()),
-        ("featureClass", "P"),
-        ("radius", match_max_nearby_radius().as_str())
+        ("username", &uname),
+        ("lat", &lat_str),
+        ("lng", &lng_str),
+        ("featureClass", &"P".to_owned()),
+        ("radius", &match_max_nearby_radius())
         ]).send()
       .await
       .expect("failed to get response")
@@ -225,9 +225,9 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
       .await
     ,
     _ => client.get(url).query(&[
-        ("username", uname.as_str()),
-        ("lat", lat_str.as_str()),
-        ("lng", lng_str.as_str()),
+        ("username", &uname),
+        ("lat", &lat_str),
+        ("lng", &lng_str),
       ]).send()
         .await
         .expect("failed to get response")
@@ -235,7 +235,7 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
         .await
   };
   if let Ok(result_string) = result {
-      let data: Map<String, Value> = serde_json::from_str(result_string.as_str()).unwrap();
+      let data: Map<String, Value> = serde_json::from_str(&result_string).unwrap();
       Some(data.clone())
   } else {
       None
@@ -437,13 +437,13 @@ pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &
 
 pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str) -> Option<TimeZone> {
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
-      match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(lng))
+      match_current_time_zone(&tz_item.tz, utc_string, Some(lng))
   } else {
     let rows = fetch_nearby_from_geonames(lat, lng).await;
     if rows.len() > 0 {
       let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&rows, lat, lng);
       if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
-          match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(best_lng))
+          match_current_time_zone(&tz_item.tz, utc_string, Some(best_lng))
       } else {
         extract_time_from_first_row(&rows, lng, utc_string)
       }
@@ -489,7 +489,7 @@ pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Opt
         .text()
         .await;
   if let Ok(result_string) = result {
-      let data: Map<String, Value> = serde_json::from_str(result_string.as_str()).unwrap();
+      let data: Map<String, Value> = serde_json::from_str(&result_string).unwrap();
       map_json_to_geoname_rows(Some(data), None).await
   } else {
       vec![]
@@ -514,7 +514,7 @@ pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, fuzzy: 
   let mut count: usize = 0;
   let max_count = max as usize;
   for row in items {
-    if count <= max_count {
+    if count < max_count {
       let key = row.to_key();
       if !keys.contains(&key) && is_in_geo_row_alternative(&row, search) {
         keys.push(key);
@@ -546,7 +546,7 @@ fn is_in_geo_row_alternative(row: &GeoNameRow, search: &str) -> bool {
 fn build_regex(pat: &str, case_insensitive: bool) -> Regex {
     let prefix = if case_insensitive { "(?i)" } else { "" };
     let corrected_pattern = [prefix, pat].join("");
-    Regex::new(corrected_pattern.as_str()).unwrap()
+    Regex::new(&corrected_pattern).unwrap()
 }
 
 fn pattern_matches(text: &str, pat: &str, case_insensitive: bool) -> bool {
