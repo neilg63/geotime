@@ -38,6 +38,8 @@ async fn main()  -> std::io::Result<()> {
         .route("/", web::get().to(welcome))
         .service(tz_info)
         .service(geo_time_info)
+        .service(search_by_name)
+        .service(lookup_by_name)
         .route("/{sec1}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}/{sec3}", web::get().to(route_not_found))

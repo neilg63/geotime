@@ -8,11 +8,14 @@ pub struct InputOptions {
   pub dt: Option<String>, // primary UTC date string
   pub dtl: Option<String>, // primary date string in local time
   pub jd: Option<f64>, // primary jd as a float
-  pub un: Option<i64>, // primary jd as a float
+  pub un: Option<i64>, // primary unix timestamp as an integer
   pub zn: Option<String>, // comma-separated lat,lng(,alt) numeric string
   pub loc: Option<String>, // comma-separated lat,lng(,alt) numeric string
-  pub place: Option<String>, // comma-separated lat,lng(,alt) numeric string
+  pub place: Option<String>, // simple string
   pub cc: Option<String>, // country code
+  pub mode: Option<String>, // all: all features, default cities and regions / countries only for search endpoint
+  pub fuzzy: Option<u8>, // fuzziness on a scale from 0 to 100
+  pub included: Option<u8>, // Default: 1 (true), 0: false. Place name includes the search string, not just a district of a larger metropolis or region
 }
 
 fn is_valid_date_string(dt_str: &str) -> bool {

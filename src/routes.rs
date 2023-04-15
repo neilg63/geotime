@@ -40,3 +40,47 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   };  
   Json(json!(info))
 }
+
+#[get("/search")]
+pub async fn search_by_name(params: Query<InputOptions>) -> impl Responder {
+  let place: String = params.place.clone().unwrap_or("".to_string());
+  let has_search = place.len() > 1;
+  let fuzzy_100 = params.fuzzy.unwrap_or(100);
+  let fuzzy_opt = if fuzzy_100 < 100 && fuzzy_100 > 0 { Some(fuzzy_100 as f32 / 100f32) } else { None };
+  let cc_str = params.cc.clone().unwrap_or("".to_string());
+  let cc_len = cc_str.len();
+  let cc = if cc_len > 1 && cc_len < 4 { 
+    Some(cc_str.to_uppercase())
+   } else { None };
+  let included = params.included.unwrap_or(1) != 0;
+  let results = if has_search {
+    search_by_fuzzy_names(&place, &cc, fuzzy_opt, false, included).await
+  } else {
+    vec![]
+  };
+  let count = results.len();
+  let info = json!({
+    "count": count,
+    "results": results
+  });  
+  Json(json!(info))
+}
+
+#[get("/lookup")]
+pub async fn lookup_by_name(params: Query<InputOptions>) -> impl Responder {
+  let place: String = params.place.clone().unwrap_or("".to_string());
+  let has_search = place.len() > 1;
+  let fuzzy_100 = params.fuzzy.unwrap_or(100);
+  let fuzzy_opt = if fuzzy_100 < 100 && fuzzy_100 > 0 { Some(fuzzy_100 as f32 / 100f32) } else { None };
+  let cc_str = params.cc.clone().unwrap_or("".to_string());
+  let cc_len = cc_str.len();
+  let cc = if cc_len > 1 && cc_len < 4 { 
+    Some(cc_str.to_uppercase())
+   } else { None };
+  let results = if has_search {
+    list_by_fuzzy_name_match(&place, &cc, fuzzy_opt).await
+  } else {
+    vec![]
+  };
+  Json(json!(results))
+}

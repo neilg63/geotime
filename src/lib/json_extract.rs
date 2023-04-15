@@ -11,14 +11,23 @@ pub fn extract_f64_from_value_map(row: &Map<String, Value>, key: &str) -> f64 {
   }
 }
 
-pub fn extract_string_from_value_map(row: &Map<String, Value>, key: &str) -> String {
+
+pub fn extract_optional_string_from_value_map(row: &Map<String, Value>, key: &str) -> Option<String> {
   match row.get(key) {
       Some(num_str_val) => match num_str_val {
-          Value::String(num_str) =>  num_str.to_owned(),
-          Value::Number(num_ref) =>  num_ref.to_string(),
-          _ => "".to_owned(),
+          Value::String(num_str) =>  Some(num_str.to_owned()),
+          Value::Number(num_ref) =>  Some(num_ref.to_string()),
+          _ => None,
       },
-      _ => "".to_owned(),
+      _ => None,
+  }
+}
+
+pub fn extract_string_from_value_map(row: &Map<String, Value>, key: &str) -> String {
+  if let Some(str_val) = extract_optional_string_from_value_map(row, key) {
+    str_val
+  } else {
+    "".to_string()
   }
 }
 

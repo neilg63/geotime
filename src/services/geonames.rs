@@ -1,7 +1,9 @@
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
-use crate::lib::date_conv::unixtime_to_utc;
+use regex::{Regex};
+use diacritics::*;
+use crate::{lib::date_conv::unixtime_to_utc, data::alternative_names::ALTERNATIVE_NAMES};
 
 use crate::args::*;
 use super::timezonedb::*;
@@ -14,7 +16,11 @@ pub struct GeoNameRow {
     pub name: String,
     pub toponym: String,
     pub fcode: String,
-    pub pop: u32
+    pub pop: u32,
+    #[serde(rename="countryCode",skip_serializing_if = "Option::is_none")]
+    pub country_code: Option<String>,
+    #[serde(rename="adminName",skip_serializing_if = "Option::is_none")]
+    pub admin_name: Option<String>,
 }
 
 impl GeoNameRow {
@@ -25,13 +31,17 @@ impl GeoNameRow {
         let toponym = extract_string_from_value_map(&row, "toponymName");
         let fcode = extract_string_from_value_map(&row, "fcode");
         let pop = extract_u32_from_value_map(&row, "population");
+        let country_code = extract_optional_string_from_value_map(&row, "countryCode");
+        let admin_name = extract_optional_string_from_value_map(&row, "adminName1");
         GeoNameRow { 
             lng,
             lat,
             name,
             toponym,
             fcode,
-            pop
+            pop,
+            country_code,
+            admin_name,
         }
     }
 
@@ -45,7 +55,9 @@ impl GeoNameRow {
             name,
             toponym,
             fcode,
-            pop: 0
+            pop: 0,
+            country_code: None,
+            admin_name: None,
         }
     }
 
@@ -56,9 +68,47 @@ impl GeoNameRow {
         name: name.clone(),
         toponym: name,
         fcode,
-        pop
+        pop,
+        country_code: None,
+        admin_name: None,
       }
     }
+
+    pub fn cc_suffix(&self) -> String {
+      if let Some(cc) = self.country_code.clone() {
+        format!(" ({})", cc)
+      } else {
+        "".to_owned()
+      }
+    }
+
+    pub fn admin_suffix(&self) -> String {
+      if let Some(a_name) = self.admin_name.clone() {
+        format!(", {}", a_name)
+      } else {
+        "".to_owned()
+      }
+    }
+
+    pub fn text(&self) -> String {
+      format!("{}{}{}", self.name, self.admin_suffix(), self.cc_suffix())
+    }
+
+    pub fn to_simple(&self) -> GeoNameSimple {
+      GeoNameSimple { lng: self.lng, lat: self.lat, text: self.text() }
+    }
+
+    pub fn to_key(&self) -> String {
+      format!("{}_{}_{}_{}_{}", self.name, self.admin_name.clone().unwrap_or("".to_string()), self.country_code.clone().unwrap_or("".to_string()), self.lat.floor(), self.lng.floor())
+    }
+
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeoNameSimple {
+    pub lng: f64,
+    pub lat: f64,
+    pub text: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -195,6 +245,10 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
 
 pub async fn fetch_extended_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow> {
   let output = fetch_from_geonames("extendedFindNearbyJSON", lat, lng).await;
+  map_json_to_geoname_rows(output, Some((lat, lng))).await
+}
+
+pub async fn map_json_to_geoname_rows(output: Option<Map<String, Value>>, lat_lng: Option<(f64, f64)>) -> Vec<GeoNameRow> {
   let mut rows:Vec<GeoNameRow> = vec![];
   if let Some(data) = output {
       if data.contains_key("geonames") {
@@ -218,7 +272,8 @@ pub async fn fetch_extended_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow>
               },
               _ => Vec::new(),
           };
-      } else if data.contains_key("ocean") {
+      } else if lat_lng.is_some() && data.contains_key("ocean") {
+        let (lat, lng) = lat_lng.unwrap();
         rows = fetch_nearby_from_geonames(lat, lng).await;
         if rows.len() < 2 {
           rows = match &data["ocean"] {
@@ -402,4 +457,100 @@ pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str) -
       }
     }
   }
+}
+
+pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Option<f32>, all_classes: bool, included: bool) -> Vec<GeoNameRow> {
+  let url = format!("{}/{}", GEONAMES_API_BASE, "searchJSON"); 
+  let client = get_cached_http_client();
+  let uname = match_geonames_username();
+  let fuzzy_int = if let Some(f_int) = fuzzy { f_int } else { 1f32 };
+  let fuzzy_string = fuzzy_int.to_string();
+  let mut items: Vec<(&str, &str)> = vec![
+        ("username", &uname),
+        ("q", search),
+        ("fuzzy", &fuzzy_string)];
+  if !all_classes {
+    items.push(("featureClass", "P"));
+    items.push(("featureClass", "A"));
+  }
+  if let Some(cc_str) = cc {
+    items.push(("country", &cc_str ))
+  }
+  if included {
+    items.push(("isNameRequired", "true" ))
+  }
+  let result = client.get(url).query(&items).send()
+        .await
+        .expect("failed to get response")
+        .text()
+        .await;
+  if let Ok(result_string) = result {
+      let data: Map<String, Value> = serde_json::from_str(result_string.as_str()).unwrap();
+      map_json_to_geoname_rows(Some(data), None).await
+  } else {
+      vec![]
+  }
+}
+
+pub fn matches_alternative(search: &str) -> Option<String> {
+  let text = simplify_string(search);
+  let pair_opt = ALTERNATIVE_NAMES.into_iter().find(|pair| simplify_string(pair.0).starts_with(&text));
+  if let Some(pair) = pair_opt {
+    Some(pair.1.to_owned())
+  } else {
+    None
+  }
+}
+
+pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, fuzzy: Option<f32>) -> Vec<GeoNameSimple> {
+  let items = search_by_fuzzy_names(search, cc, fuzzy, false, true).await;
+  let mut rows: Vec<GeoNameSimple> = Vec::new();
+  let mut keys: Vec<String> = Vec::new();
+  for row in items {
+    let key = row.to_key();
+    if !keys.contains(&key) && is_in_geo_row_alternative(&row, search) {
+      keys.push(key);
+      rows.push(row.to_simple());
+    }
+  }
+  rows
+}
+
+fn is_in_geo_row(row: &GeoNameRow, search: &str) -> bool {
+  is_in_simple_string(&row.name, search) || is_in_simple_string(&row.toponym, search)
+}
+
+fn is_in_geo_row_alternative(row: &GeoNameRow, search: &str) -> bool {
+  let mut ok = is_in_geo_row(row, search);
+  if !ok {
+    if let Some(matched_name) = matches_alternative(search) {
+      ok = is_in_simple_string(&matched_name, &row.name);
+      if !ok {
+        ok = is_in_simple_string(&matched_name, &row.toponym)
+      }
+    }
+  }
+  ok
+}
+
+fn build_regex(pat: &str, case_insensitive: bool) -> Regex {
+    let prefix = if case_insensitive { "(?i)" } else { "" };
+    let corrected_pattern = [prefix, pat].join("");
+    Regex::new(corrected_pattern.as_str()).unwrap()
+}
+
+fn pattern_matches(text: &str, pat: &str, case_insensitive: bool) -> bool {
+    let re = build_regex(pat, case_insensitive);
+    re.is_match(text)
+}
+
+fn is_in_simple_string(text: &String, search: &str) -> bool {
+  let search_first = search.trim().split(" ").nth(0).unwrap_or("");
+  let pat = remove_diacritics(search_first);
+  let simple_text = remove_diacritics(text);
+  pattern_matches(&simple_text, &pat, true)
+}
+
+fn simplify_string(text: &str) -> String {
+  remove_diacritics(text).to_lowercase()
 }
