@@ -93,6 +93,32 @@ impl TimeZone {
   pub fn set_natural_offset(&mut self, lng: f64) {
     self.solar_utc_offset = Some(natural_tz_offset_from_utc(lng));
   }
+
+  pub fn offset(&self) -> i64 {
+    self.gmt_offset as i64
+  }
+
+  pub fn next_offset(&self) -> i64 {
+    if let Some(nx_offset) = self.period.next_gmt_offset {
+      nx_offset as i64
+    } else {
+      self.offset()
+    }
+  }
+
+  pub fn next_diff_offset(&self) -> i64 {
+    self.offset() - self.next_offset()
+  }
+
+  pub fn secs_since_start(&self) -> i64 {
+    let curr_ts = self.ref_unix.unwrap_or(0);
+    if let Some(start_ts) = self.period.start {
+      curr_ts - start_ts
+    } else {
+      0i64
+    }
+  }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

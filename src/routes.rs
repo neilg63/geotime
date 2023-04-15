@@ -32,9 +32,13 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let coords_option = match_coords_from_params(&params);
   let (corrected_dt, local) = match_datetime_from_params(&params);
   let info = match has_zn {
-    true => match_current_time_zone(zn.as_str(), corrected_dt.as_str(), None),
+    true => match_current_time_zone(&zn, &corrected_dt, None),
     _ => match coords_option {
-        Some(coords) => fetch_time_info_from_coords_local(coords.lat, coords.lng, &corrected_dt, local).await,
+        Some(coords) => {
+          let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt).await } else { corrected_dt.clone() };
+          let local = local && adjusted_dt == corrected_dt;
+          fetch_time_info_from_coords_local(coords.lat, coords.lng, &adjusted_dt, local).await
+        },
         _ => None
     }
   };  

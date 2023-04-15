@@ -46,7 +46,7 @@ pub fn match_datetime_from_params(params:&Query<InputOptions>) -> (String, bool)
       dt_str = current_datetime_string();
     }
   }
-  (iso_string_to_datetime(dt_str.as_str()).to_string(), local)
+  (iso_string_to_datetime(dt_str.as_str()).to_string().replace(" ", "T"), local)
 }
 
 pub fn match_coords_from_params(params:&Query<InputOptions>) -> Option<Coords> {

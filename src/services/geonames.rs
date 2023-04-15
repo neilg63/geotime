@@ -392,15 +392,19 @@ pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str) -> St
   let mut adjusted_dt = utc_string.to_owned();
   if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string).await {
     if let Some(unix_ts) = tz_info.ref_unix {
-      let gmt_offset = tz_info.gmt_offset as i64;
-      let adjusted_unix_time = unix_ts - gmt_offset;
-      adjusted_dt = unixtime_to_utc(adjusted_unix_time);
-      let before_start = adjusted_unix_time <= tz_info.period.start.unwrap_or(0);
+      let adjusted_unix_time = unix_ts - tz_info.offset();
+      let next_adjusted_unix_time = adjusted_unix_time + tz_info.next_diff_offset();
+      adjusted_dt = unixtime_to_utc(unix_ts);
+      let before_start = next_adjusted_unix_time <= tz_info.period.start.unwrap_or(0);
       let beyond_end = if !before_start && tz_info.period.end.is_some() { adjusted_unix_time >= tz_info.period.end.unwrap() } else { false };
+      let skip = before_start && tz_info.secs_since_start() < tz_info.next_diff_offset().abs();
+      
       if before_start || beyond_end {
-        if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, &adjusted_dt).await {
-          let adjusted_unix_time = unix_ts - tz_info.gmt_offset as i64;
-          adjusted_dt = unixtime_to_utc(adjusted_unix_time);
+        if skip {
+          adjusted_dt = unixtime_to_utc(unix_ts - tz_info.next_diff_offset().abs());
+        } else if let Some(tzi) = fetch_time_info_from_coords(lat, lng, &adjusted_dt).await {
+          let ts = unix_ts - tzi.offset();
+          adjusted_dt = unixtime_to_utc(ts);
         }
       }
     }
