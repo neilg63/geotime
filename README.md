@@ -130,8 +130,6 @@ Query string parameters
 - cc: Optional two-letter country code to narrow searches to a given country
 - fuzzy: on a scale from 0 to 100, 100 is the maximum tolerance of spelling and name association and 0 for exact matches only. The default is 100
 
-If no time is specified, the current time will be used.
-
 #### Response
 
 - Array of objects with text (place name, region (CountryCode)), lat and lng
