@@ -4,6 +4,8 @@ This server application uses the open source time zone database and Geonames ser
 
 ## What problem does GeoTimeZone solve?
 
+While many existing application, usually fully integrated with your device's operating system, make it easy to find the current time zone and UTC offset for your location or for any identifiable time zone, it is not easy to find time zone data if you only know the latitude and longitude without querying first a location search service and then a time zone service. Additionally, time zones and daylight saving times have regularly changed for historic local times in some countries and regions. Most such shifts are only usually 1 or 2 hours, but this can make a significant difference where the exact chronology of events matters or an exact UTC date-time, unix timestamp or Julian day is required.
+
 ## Build instructions:
 
 You may use `cargo build (--release)` to build an executable for your operating system (all versions of Linux, Mac or Windows supported by Rust 1.61). This application requires MySQL or MariaDB. However, you will have to download and import the database (TimeZoneDB.sql.zip) from the [Timezone DB site](https://timezonedb.com/download).
