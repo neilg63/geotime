@@ -114,6 +114,7 @@ Query string parameters
 - cc: Optional two-letter country code to narrow searches to a given country
 - fuzzy: on a scale from 0 to 100, 100 is the maximum tolerance of spelling and name association and 0 for exact matches only. The default is 100
 - included: 0 (default) include localities and regions and countries only, 1: include all topographic features such as buildings, airports, lakes and seas
+- max: number of results between 1 and 255, default: 50
 
 #### Response
 
@@ -129,6 +130,7 @@ Query string parameters
 - place: Search string, which may include country or region names for disambiguation
 - cc: Optional two-letter country code to narrow searches to a given country
 - fuzzy: on a scale from 0 to 100, 100 is the maximum tolerance of spelling and name association and 0 for exact matches only. The default is 100
+- max: number of results between 1 and 255, default: 20
 
 #### Response
 
