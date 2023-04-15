@@ -52,9 +52,10 @@ pub async fn search_by_name(params: Query<InputOptions>) -> impl Responder {
   let cc = if cc_len > 1 && cc_len < 4 { 
     Some(cc_str.to_uppercase())
    } else { None };
+   let max = params.max.unwrap_or(50);
   let included = params.included.unwrap_or(1) != 0;
   let results = if has_search {
-    search_by_fuzzy_names(&place, &cc, fuzzy_opt, false, included).await
+    search_by_fuzzy_names(&place, &cc, fuzzy_opt, false, included, max).await
   } else {
     vec![]
   };
@@ -74,11 +75,12 @@ pub async fn lookup_by_name(params: Query<InputOptions>) -> impl Responder {
   let fuzzy_opt = if fuzzy_100 < 100 && fuzzy_100 > 0 { Some(fuzzy_100 as f32 / 100f32) } else { None };
   let cc_str = params.cc.clone().unwrap_or("".to_string());
   let cc_len = cc_str.len();
+  let max = params.max.unwrap_or(20);
   let cc = if cc_len > 1 && cc_len < 4 { 
     Some(cc_str.to_uppercase())
    } else { None };
   let results = if has_search {
-    list_by_fuzzy_name_match(&place, &cc, fuzzy_opt).await
+    list_by_fuzzy_name_match(&place, &cc, fuzzy_opt, max).await
   } else {
     vec![]
   };

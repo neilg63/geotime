@@ -459,7 +459,7 @@ pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str) -
   }
 }
 
-pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Option<f32>, all_classes: bool, included: bool) -> Vec<GeoNameRow> {
+pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Option<f32>, all_classes: bool, included: bool, max_rows: u8) -> Vec<GeoNameRow> {
   let url = format!("{}/{}", GEONAMES_API_BASE, "searchJSON"); 
   let client = get_cached_http_client();
   let uname = match_geonames_username();
@@ -478,6 +478,10 @@ pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Opt
   }
   if included {
     items.push(("isNameRequired", "true" ))
+  }
+  let m_str = string_to_static_str(max_rows);
+  if max_rows > 1 {
+    items.push(("maxRows", m_str ));
   }
   let result = client.get(url).query(&items).send()
         .await
@@ -502,15 +506,21 @@ pub fn matches_alternative(search: &str) -> Option<String> {
   }
 }
 
-pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, fuzzy: Option<f32>) -> Vec<GeoNameSimple> {
-  let items = search_by_fuzzy_names(search, cc, fuzzy, false, true).await;
+pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
+  let max_initial_search = if max < 10 { 20 } else if max < 127 {  max * 2 } else { 255 };
+  let items = search_by_fuzzy_names(search, cc, fuzzy, false, true, max_initial_search).await;
   let mut rows: Vec<GeoNameSimple> = Vec::new();
   let mut keys: Vec<String> = Vec::new();
+  let mut count: usize = 0;
+  let max_count = max as usize;
   for row in items {
-    let key = row.to_key();
-    if !keys.contains(&key) && is_in_geo_row_alternative(&row, search) {
-      keys.push(key);
-      rows.push(row.to_simple());
+    if count <= max_count {
+      let key = row.to_key();
+      if !keys.contains(&key) && is_in_geo_row_alternative(&row, search) {
+        keys.push(key);
+        rows.push(row.to_simple());
+        count += 1;
+      }
     }
   }
   rows
@@ -553,4 +563,9 @@ fn is_in_simple_string(text: &String, search: &str) -> bool {
 
 fn simplify_string(text: &str) -> String {
   remove_diacritics(text).to_lowercase()
+}
+
+fn string_to_static_str(value: u8) -> &'static str {
+  let s = value.to_string();
+  Box::leak(s.into_boxed_str())
 }

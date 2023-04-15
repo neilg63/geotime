@@ -15,6 +15,7 @@ pub struct InputOptions {
   pub cc: Option<String>, // country code
   pub mode: Option<String>, // all: all features, default cities and regions / countries only for search endpoint
   pub fuzzy: Option<u8>, // fuzziness on a scale from 0 to 100
+  pub max: Option<u8>, // max rows returned in the /lookup route, default is 20
   pub included: Option<u8>, // Default: 1 (true), 0: false. Place name includes the search string, not just a district of a larger metropolis or region
 }
 
