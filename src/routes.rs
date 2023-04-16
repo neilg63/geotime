@@ -20,8 +20,11 @@ pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
     _ => Coords::zero()
   };
   let (corrected_dt, local) = match_datetime_from_params(&params);
-  let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt).await } else { corrected_dt };
-  let info = fetch_geo_time_info(coords.lat, coords.lng, &adjusted_dt).await;
+  let enforce_dst = params.dst.unwrap_or(1) > 0;
+  reset_override();
+  let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt, enforce_dst).await } else { corrected_dt.clone() };
+
+  let info = fetch_geo_time_info(coords.lat, coords.lng, &adjusted_dt, enforce_dst).await;
   Json(json!(info))
 }
 
@@ -31,13 +34,13 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let has_zn = zn.len() > 4 && zn.contains("/");
   let coords_option = match_coords_from_params(&params);
   let (corrected_dt, local) = match_datetime_from_params(&params);
+  let enforce_dst = params.dst.unwrap_or(1) > 0;
+  reset_override();
   let info = match has_zn {
-    true => match_current_time_zone(&zn, &corrected_dt, None),
+    true => match_current_time_zone(&zn, &corrected_dt, None, enforce_dst),
     _ => match coords_option {
         Some(coords) => {
-          let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt).await } else { corrected_dt.clone() };
-          let local = local && adjusted_dt == corrected_dt;
-          fetch_time_info_from_coords_local(coords.lat, coords.lng, &adjusted_dt, local).await
+          fetch_time_info_from_coords_adjusted(coords, &corrected_dt, local, enforce_dst).await
         },
         _ => None
     }

@@ -5,6 +5,39 @@ use crate::data::mysql::*;
 use crate::lib::date_conv::*;
 use chrono::{Datelike};
 
+struct OffsetOverride {
+  value: Option<i32>
+}
+
+impl Default for OffsetOverride {
+  fn default() -> Self {
+    OffsetOverride {value: None}
+  }
+}
+
+impl OffsetOverride {
+
+  pub fn set(&mut self, value: i32) {
+    self.value = Some(value);    
+  }
+
+  pub fn reset(&mut self) {
+    self.value = None;
+  }
+
+  pub fn get(&self) -> Option<i32> {
+    self.value
+  }
+
+  pub fn is_set(&self) -> bool {
+    self.value.is_some()
+  }
+}
+
+pub fn reset_override() {
+  let mut ov = globals::get::<OffsetOverride>();
+  ov.reset();
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TimeZone {
@@ -34,6 +67,8 @@ pub struct TimeZone {
 impl TimeZone {
   pub fn new(zone_name: String, country_code: String, abbreviation: String, time_start: i64, gmt_offset: i32, dst: bool) -> TimeZone {
     let period = TimeZonePeriod::new(time_start, None, None);
+    let ov = globals::get::<OffsetOverride>();
+    let gmt_offset = ov.get().unwrap_or(gmt_offset);
     TimeZone { zone_name, country_code, abbreviation, gmt_offset, dst, local_dt: None, utc: None, period, week_day: None, ref_unix: None, ref_jd: None, solar_utc_offset: None }
   }
 
@@ -98,6 +133,11 @@ impl TimeZone {
     self.gmt_offset as i64
   }
 
+  pub fn subtract_offset(&mut self) {
+    //let diff = self.next_diff_offset().abs() as i32;
+    self.gmt_offset -= 3600;
+  }
+
   pub fn next_offset(&self) -> i64 {
     if let Some(nx_offset) = self.period.next_gmt_offset {
       nx_offset as i64
@@ -116,6 +156,35 @@ impl TimeZone {
       curr_ts - start_ts
     } else {
       0i64
+    }
+  }
+
+  pub fn secs_to_end(&self) -> i64 {
+    let curr_ts = self.ref_unix.unwrap_or(0);
+    if let Some(end_ts) = self.period.end {
+      end_ts - curr_ts
+    } else {
+      0i64
+    }
+  }
+
+  pub fn is_overlap_period(&self) -> bool {
+    self.is_overlap_period_offset(0)
+  }
+
+  pub fn is_overlap_period_extra(&self) -> bool {
+    self.is_overlap_period_offset(0 - self.offset())
+  }
+
+  pub fn is_overlap_period_offset(&self, offset: i64) -> bool {
+    let next_back = self.next_diff_offset() < 0;
+    let diff_abs = self.next_diff_offset().abs();
+    if self.secs_to_end() - offset < diff_abs {
+      !next_back
+    } else if self.secs_since_start() < diff_abs {
+      next_back
+    } else {
+      false
     }
   }
 
@@ -182,11 +251,20 @@ fn match_nextprev_time_zone(zn: &str, ts: i64, next: bool) -> Option<TimeZone> {
   fetch_time_zone_row(sql)
 }
 
-pub fn match_current_time_zone(zn: &str, date_str: &str, lng_opt: Option<f64>) -> Option<TimeZone> {
+pub fn match_current_time_zone(zn: &str, date_str: &str, lng_opt: Option<f64>, enforce_dst: bool) -> Option<TimeZone> {
   let ts = match_unix_ts_from_fuzzy_datetime(date_str);
   if let Some(mut current) = match_nextprev_time_zone(zn, ts, false) { 
       if let Some(next) = match_nextprev_time_zone(zn, ts, true) {
           current.add_end(next.time_start(), next.gmt_offset);
+      }
+      let apply_correction = current.is_overlap_period() && !enforce_dst;
+      if apply_correction {
+        let ts_tomorrow = ts + 86400;
+        if let Some(future) = match_nextprev_time_zone(zn, ts_tomorrow, false) {
+          current.gmt_offset = future.gmt_offset;
+          let mut ov = globals::get::<OffsetOverride>();
+          ov.set(current.gmt_offset);
+        }
       }
       current.set_ref_time(ts);
       if let Some(lng) = lng_opt {
@@ -231,3 +309,5 @@ pub fn fetch_time_zone_row(sql: String) -> Option<TimeZone> {
         None
     }
 }
+
+

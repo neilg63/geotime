@@ -8,8 +8,7 @@ While many existing tools, fully integrated with your device's operating system,
 
 ## Summer or Daylight Saving Time
 
-Reported local times near daylight-saving-time boundaries are problematic. If the clocks go forward at 02:00:00, there are no official local times between 02:00:00 and 02:59:59. The clock jumps from 01:59:59 to 03:00:00. The logic applied here assumes 02:30:00 is the same UTC time as 03:30:30. However, when the clocks go back at 02:00:00, the clock jumps from 01:59:59 to 01:00:00. This means 01:30:00 occurs twice once with summer time and once without.
-In both the /geotime and /timezone endpoints, you may enter an ISO-like datetime string to the _dtl_ query string parameter, however, this does not specify if summer time was active at the time.
+Reported local times near daylight-saving-time boundaries are problematic when specifying local time via _dl_ in the /geotime and /timezone endpoints. If the clocks go forward at 01:00:00 (1am), there are no official local times between 01:00:00 and 01:59:59. The clock jumps from 00:59:59 to 02:00:00. The logic applied here assumes 02:30:00 is the same UTC time as 03:30:30. However, when the clocks go back at 02:00:00, the clock jumps from 01:59:59 to 01:00:00. This means 01:30:00 occurs twice once with summer time and once without. In this case the logic applied assumes summer time continues until the end of the overlapping period, unless the _dst_ parameter is set to 0 to cover the skipped UTC hour. Using the previous example, _dtl=2022-10-30T01:30:00&dst=0_ is the hour after _dtl=2022-10-30T00:30:00&dst=1_ (the default without the _dst_ parameter).
 
 ## Build instructions:
 

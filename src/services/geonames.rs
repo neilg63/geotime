@@ -3,6 +3,8 @@ use serde_json::*;
 use clap::Parser;
 use regex::{Regex};
 use diacritics::*;
+use crate::lib::coords::Coords;
+use crate::lib::date_conv::iso_string_to_datetime;
 use crate::{lib::date_conv::unixtime_to_utc, data::alternative_names::ALTERNATIVE_NAMES};
 
 use crate::args::*;
@@ -365,7 +367,7 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
   time
 }
 
-pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str) -> GeoTimeInfo {
+pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
   let placenames = fetch_extended_from_geonames(lat, lng).await;
   let mut time: Option<TimeZone> = None;
   let mut time_matched = false;
@@ -373,7 +375,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str) -> GeoTim
 
   if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
     if tz_item.tz.len() > 2 {
-      time = match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(lng));
+      time = match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(lng), enforce_dst);
       if let Some(time_row) = time.clone() {
         time_matched = time_row.zone_name.len() > 2;
       }
@@ -388,23 +390,34 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str) -> GeoTim
   }
 }
 
-pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str) -> String {
+pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) ->String {
   let mut adjusted_dt = utc_string.to_owned();
-  if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string).await {
+  if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst).await {
     if let Some(unix_ts) = tz_info.ref_unix {
       let adjusted_unix_time = unix_ts - tz_info.offset();
       let next_adjusted_unix_time = adjusted_unix_time + tz_info.next_diff_offset();
-      adjusted_dt = unixtime_to_utc(unix_ts);
+      adjusted_dt = unixtime_to_utc(adjusted_unix_time);
+      let ref_start = if enforce_dst { adjusted_unix_time } else { next_adjusted_unix_time };
       let before_start = next_adjusted_unix_time <= tz_info.period.start.unwrap_or(0);
-      let beyond_end = if !before_start && tz_info.period.end.is_some() { adjusted_unix_time >= tz_info.period.end.unwrap() } else { false };
+      let beyond_end = if !before_start && tz_info.period.end.is_some() { ref_start >= tz_info.period.end.unwrap() } else { false };
       let skip = before_start && tz_info.secs_since_start() < tz_info.next_diff_offset().abs();
-      
       if before_start || beyond_end {
         if skip {
-          adjusted_dt = unixtime_to_utc(unix_ts - tz_info.next_diff_offset().abs());
-        } else if let Some(tzi) = fetch_time_info_from_coords(lat, lng, &adjusted_dt).await {
-          let ts = unix_ts - tzi.offset();
+          if enforce_dst {
+            adjusted_dt = unixtime_to_utc(unix_ts - tz_info.next_diff_offset().abs());
+          }
+        }
+        if let Some(tzi) = fetch_time_info_from_coords(lat, lng, &adjusted_dt, enforce_dst).await {
+          let ref_offset = if enforce_dst { tzi.offset() } else { tzi.offset() - tzi.next_diff_offset().abs() };
+          let ts = unix_ts - ref_offset;
           adjusted_dt = unixtime_to_utc(ts);
+        }
+        if tz_info.is_overlap_period_extra() && !enforce_dst {  
+          let overlap_secs = tz_info.offset();
+          let diff = if enforce_dst { overlap_secs } else { 0 - tz_info.next_diff_offset() };
+          if tz_info.offset() < 0 {
+            adjusted_dt = unixtime_to_utc(iso_string_to_datetime(&adjusted_dt).timestamp() + diff);
+          }
         }
       }
     }
@@ -416,14 +429,14 @@ fn abbreviate_ocean_name(row: &GeoNameRow) -> String {
   row.name.replace(" Ocean", "").trim().replace(" ", "_")
 }
 
-pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &str, local: bool) -> Option<TimeZone> {
+pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &str, local: bool, enforce_dst: bool) -> Option<TimeZone> {
   if local {
-    if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string).await {
+    if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst).await {
       if let Some(unix_ts) = tz_info.ref_unix {
         let adjusted_unix_time = unix_ts - tz_info.gmt_offset as i64;
         if tz_info.gmt_offset != 0 {
           let adjust_dt_str = unixtime_to_utc(adjusted_unix_time);
-          fetch_time_info_from_coords(lat, lng, &adjust_dt_str).await
+          fetch_time_info_from_coords(lat, lng, &adjust_dt_str, enforce_dst).await
         } else {
           Some(tz_info)
         }
@@ -435,24 +448,29 @@ pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &
       None
     }
   } else {
-    fetch_time_info_from_coords(lat, lng, utc_string).await
+    fetch_time_info_from_coords(lat, lng, utc_string, false).await
   }
 }
 
-pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str) -> Option<TimeZone> {
+pub async fn fetch_time_info_from_coords_adjusted(coords: Coords, utc_string: &str, local: bool, enforce_dst: bool) -> Option<TimeZone> {
+  let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, utc_string, enforce_dst).await } else { utc_string.to_owned() };
+  fetch_time_info_from_coords_local(coords.lat, coords.lng, &adjusted_dt, false, enforce_dst).await
+}
+
+pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> Option<TimeZone> {
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
-      match_current_time_zone(&tz_item.tz, utc_string, Some(lng))
+      match_current_time_zone(&tz_item.tz, utc_string, Some(lng), enforce_dst)
   } else {
     let rows = fetch_nearby_from_geonames(lat, lng).await;
     if rows.len() > 0 {
       let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&rows, lat, lng);
       if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
-          match_current_time_zone(&tz_item.tz, utc_string, Some(best_lng))
+          match_current_time_zone(&tz_item.tz, utc_string, Some(best_lng), enforce_dst)
       } else {
         extract_time_from_first_row(&rows, lng, utc_string)
       }
     } else {
-      let data = fetch_geo_time_info(lat, lng, utc_string).await;
+      let data = fetch_geo_time_info(lat, lng, utc_string, enforce_dst).await;
       match data.time {
         Some(time) => Some(time),
         _ => {

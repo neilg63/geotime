@@ -17,6 +17,7 @@ pub struct InputOptions {
   pub fuzzy: Option<u8>, // fuzziness on a scale from 0 to 100
   pub max: Option<u8>, // max rows returned in the /lookup route, default is 20
   pub included: Option<u8>, // Default: 1 (true), 0: false. Place name includes the search string, not just a district of a larger metropolis or region
+  pub dst: Option<u8>, // Default 1: apply in the overlap, 0: do not apply when in the overlap hour when clocks go back, 
 }
 
 fn is_valid_date_string(dt_str: &str) -> bool {
