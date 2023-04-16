@@ -29,9 +29,9 @@ impl OffsetOverride {
     self.value
   }
 
-  pub fn is_set(&self) -> bool {
+  /* pub fn is_set(&self) -> bool {
     self.value.is_some()
-  }
+  } */
 }
 
 pub fn reset_override() {
