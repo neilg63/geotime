@@ -133,11 +133,6 @@ impl TimeZone {
     self.gmt_offset as i64
   }
 
-  pub fn subtract_offset(&mut self) {
-    //let diff = self.next_diff_offset().abs() as i32;
-    self.gmt_offset -= 3600;
-  }
-
   pub fn next_offset(&self) -> i64 {
     if let Some(nx_offset) = self.period.next_gmt_offset {
       nx_offset as i64
