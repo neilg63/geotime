@@ -496,10 +496,15 @@ pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Opt
     items.push(("featureClass", "A"));
   }
   if let Some(cc_str) = cc {
-    items.push(("country", &cc_str ))
+    items.push(("country", &cc_str ));
   }
   if included {
-    items.push(("isNameRequired", "true" ))
+    items.push(("isNameRequired", "true" ));
+  }
+  let search_len = search.len();
+  if search_len < 4 && search_len > 0 {
+    let ml = if search_len < 2 { 1 } else { 2 };
+    items.push(("name_startsWith", &search[0..ml] ));
   }
   let m_str = string_to_static_str(max_rows);
   if max_rows > 1 {
