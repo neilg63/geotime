@@ -4,15 +4,15 @@ This server application uses the open source time zone database and Geonames ser
 
 ## What problem does GeoTimeZone solve?
 
-While many existing tools, fully integrated with your device's operating system, make it easy to find the current time zone and UTC offset for your location or for any identifiable time zone, it is not as easy to find time zone data if you only know the latitude and longitude without querying first a location search service and then a time zone service. Additionally, time zones and daylight saving times have regularly changed for historic local times in many countries and regions. Most such shifts are only usually 1 or 2 hours (although Western Samoa famously moved the clocks forward 23 hours in 2012), but this can make a significant difference when the exact chronology of events matters or an accurate UTC date-time, unix timestamp or Julian day is required.
+While many existing tools, fully integrated with your device's operating system, make it easy to find the current time zone and UTC offset for your location or for any identifiable time zone, it is not as easy to find time zone data if you only know the latitude and longitude without querying first a location search service and then a time zone service. Additionally, time zones and daylight saving times have regularly changed for historic local times in many countries and regions. Most such shifts are only 1 or 2 hours (although Western Samoa famously moved the clocks forward 23 hours in 2012), but this can make a significant difference when we need an exact chronology of events or an accurate UTC date-time, unix timestamp or Julian day (for astrology).
 
 ## Summer or Daylight Saving Time
 
-Reported local times near daylight-saving-time boundaries are problematic when specifying local time via _dl_ in the /geotime and /timezone endpoints. If the clocks go forward at 01:00:00 (1am), there are no official local times between 01:00:00 and 01:59:59. The clock jumps from 00:59:59 to 02:00:00. The logic applied here assumes 02:30:00 is the same UTC time as 03:30:30. However, when the clocks go back at 02:00:00, the clock jumps from 01:59:59 to 01:00:00. This means 01:30:00 occurs twice once with summer time and once without. In this case the logic applied assumes summer time continues until the end of the overlapping period, unless the _dst_ parameter is set to 0 to cover the skipped UTC hour. Using the previous example, _dtl=2022-10-30T01:30:00&dst=0_ is the hour after _dtl=2022-10-30T00:30:00&dst=1_ (the default without the _dst_ parameter).
+Reported local times near daylight-saving-time boundaries are problematic when specifying local time via the _dtl_ parameter in the /geotime and /timezone endpoints. If the clocks go forward at 01:00:00 (1am), there are no official local times between 01:00:00 and 01:59:59. The clock jumps from 00:59:59 to 02:00:00. The logic applied here assumes 02:30:00 is the same UTC time as 03:30:30. However, when the clocks go back at 02:00:00, the clock jumps from 01:59:59 to 01:00:00. This means 01:30:00 occurs twice once with summer time and once without. In this case the logic applied assumes summer time continues until the end of the overlapping period, unless the _dst_ parameter is set to 0 to cover the skipped UTC hour. Using the previous example, _dtl=2022-10-30T01:30:00&dst=0_ is the hour after _dtl=2022-10-30T00:30:00&dst=1_ (the default without the _dst_ parameter).
 
 ## Build instructions:
 
-You may use `cargo build (--release)` to build an executable for your operating system (all versions of Linux, Mac or Windows supported by Rust 1.61). This application requires MySQL or MariaDB. However, you will have to download and import the database (TimeZoneDB.sql.zip) from the [Timezone DB site](https://timezonedb.com/download).
+You may use `cargo build (--release)` to build an executable for your operating system (all versions of Linux, Mac or Windows supported by Rust 1.63+). This application requires MySQL or MariaDB. However, you will have to download and import the database (TimeZoneDB.sql.zip) from the [Timezone DB site](https://timezonedb.com/download).
 
 ```
 mysql> create database timezonedb;
@@ -41,7 +41,7 @@ The application will pick up a .env file in the launch directory, which is assum
 
 ## Command line parameters
 
-These will override the above.
+These will override the above and serve mainly for testing purposes.
 
 - -d: MySQL database name, default: timezonedb (table name time_zone)
 - -u: MySQL user name, default: timezonedb
@@ -90,7 +90,7 @@ The current time will be used if none is specified.
 
 ### GET /geotime
 
-This shows the timezone, offsets and local time in various formats for the referenced location and date-time with related place names.
+This shows a set of related _placenames_ (from country to locality) and timezone (_time_) data as described above.
 
 Query string parameters
 
@@ -138,4 +138,4 @@ Query string parameters
 
 #### Response
 
-- Array of objects with text (place name, region (CountryCode)), lat and lng
+- Array of objects with text (place name, region (CountryCode)), lat(itude) and l(o)ng(itude).
