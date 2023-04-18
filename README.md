@@ -4,7 +4,7 @@ This server application uses the open source time zone database and Geonames ser
 
 ## What problem does GeoTimeZone solve?
 
-While many existing tools, fully integrated with your device's operating system, make it easy to find the current time zone and UTC offset for your location or for any identifiable time zone, it is not as easy to find time zone data if you only know the latitude and longitude without querying first a location search service and then a time zone service. Additionally, time zones and daylight saving times have regularly changed for historic local times in many countries and regions. Most such shifts are only 1 or 2 hours (although Western Samoa famously moved the clocks forward 23 hours in 2012), but this can make a significant difference when we need an exact chronology of events or an accurate UTC date-time, unix timestamp or Julian day (for astrology).
+While many existing tools, fully integrated with your device's operating system, make it easy to find the current universal (UTC) time for your location or for any identifiable time zone, it is not as easy to find time zone data if you only know the latitude and longitude without querying first a location search service and then a separate time zone database. Additionally, time zones and daylight saving times have regularly changed for historic local times in many countries and regions. Most such shifts may only be 1 or 2 hours (although Western Samoa famously moved the clocks forward 23 hours in 2012), but this can make a significant difference when we need an exact chronology of events or an accurate UTC date-time, unix timestamp or Julian day for applications such as astrology.
 
 ## Summer or Daylight Saving Time
 
