@@ -110,7 +110,7 @@ If no time is specified, the current time will be used.
 
 ### GET /search
 
-This provides a complementary placename search endpoint, leveraging GeoNames' [search service](http://www.geonames.org/export/geonames-search.html) with a slightly simpplifed ouitput and set of options
+This provides a complementary placename search endpoint, leveraging GeoNames' [search service](http://www.geonames.org/export/geonames-search.html) with a slightly simpplifed output and set of options
 
 Query string parameters
 
