@@ -13,6 +13,7 @@ pub struct InputOptions {
   pub loc: Option<String>, // comma-separated lat,lng(,alt) numeric string
   pub place: Option<String>, // simple string
   pub cc: Option<String>, // country code
+  pub reg: Option<String>, // admin code, e.g. region/state/province
   pub mode: Option<String>, // all: all features, default cities and regions / countries only for search endpoint
   pub fuzzy: Option<u8>, // fuzziness on a scale from 0 to 100
   pub max: Option<u8>, // max rows returned in the /lookup route, default is 20

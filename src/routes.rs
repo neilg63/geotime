@@ -14,7 +14,14 @@ pub async fn route_not_found() -> impl Responder {
 
 #[get("/geotime")]
 pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
-  let coords_option = match_coords_from_params(&params);
+  let mut coords_option = match_coords_from_params(&params);
+  let has_coords = coords_option.is_some();
+  if !has_coords { 
+    let tz_info_opt = extract_zone_name_from_place_params(&params).await;
+    if let Some((_tz_info, matched_coords)) = tz_info_opt {
+      coords_option = Some(matched_coords);
+    }
+  }
   let coords = match coords_option {
     Some(cs) => cs,
     _ => Coords::zero()
@@ -30,19 +37,29 @@ pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
 
 #[get("/timezone")]
 pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
-  let zn: String = params.zn.clone().unwrap_or("".to_string());
-  let has_zn = zn.len() > 4 && zn.contains("/");
+  let mut zn: String = params.zn.clone().unwrap_or("".to_string());
+  let mut has_zn = is_valid_zone_name(&zn);
   let coords_option = match_coords_from_params(&params);
   let (corrected_dt, local) = match_datetime_from_params(&params);
+  let has_coords = coords_option.is_some();
+  if !has_zn && !has_coords { 
+    let tz_info_opt = extract_zone_name_from_place_params(&params).await;
+    if let Some((tz_info, _coords)) = tz_info_opt {
+      zn = tz_info.tz;
+      has_zn = is_valid_zone_name(&zn);
+    }
+  }
   let enforce_dst = params.dst.unwrap_or(1) > 0;
   reset_override();
   let info = match has_zn {
     true => match_current_time_zone(&zn, &corrected_dt, None, enforce_dst),
-    _ => match coords_option {
-        Some(coords) => {
-          fetch_time_info_from_coords_adjusted(coords, &corrected_dt, local, enforce_dst).await
-        },
-        _ => None
+    _ => {
+      let ref_coords = if let Some(coords) = coords_option {
+        coords
+      } else {
+        Coords::zero()
+      };
+      fetch_time_info_from_coords_adjusted(ref_coords, &corrected_dt, local, enforce_dst).await
     }
   };  
   Json(json!(info))
@@ -59,11 +76,12 @@ pub async fn search_by_name(params: Query<InputOptions>) -> impl Responder {
   let cc = if cc_len > 1 && cc_len < 4 { 
     Some(cc_str.to_uppercase())
    } else { None };
+   let region = params.reg.clone();
    let max_ref = params.max.unwrap_or(50);
    let max = if max_ref > 0 { max_ref } else { 50 };
   let included = params.included.unwrap_or(1) != 0;
   let results = if has_search {
-    search_by_fuzzy_names(&place, &cc, fuzzy_opt, false, included, max).await
+    search_by_fuzzy_names(&place, &cc, &region, fuzzy_opt, false, included, max).await
   } else {
     vec![]
   };
@@ -88,8 +106,9 @@ pub async fn lookup_by_name(params: Query<InputOptions>) -> impl Responder {
   let cc = if cc_len > 1 && cc_len < 4 { 
     Some(cc_str.to_uppercase())
    } else { None };
+  let region = params.reg.clone();
   let results = if has_search {
-    list_by_fuzzy_name_match(&place, &cc, fuzzy_opt, max).await
+    list_by_fuzzy_name_match(&place, &cc, &region, fuzzy_opt, max).await
   } else {
     vec![]
   };

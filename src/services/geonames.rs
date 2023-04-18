@@ -1,3 +1,4 @@
+use actix_web::web::Query;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
@@ -5,6 +6,7 @@ use regex::{Regex};
 use diacritics::*;
 use crate::lib::coords::Coords;
 use crate::lib::date_conv::iso_string_to_datetime;
+use crate::query_params::InputOptions;
 use crate::{lib::date_conv::unixtime_to_utc, data::alternative_names::ALTERNATIVE_NAMES};
 
 use crate::args::*;
@@ -158,6 +160,7 @@ impl GeoNameNearby {
       rows
   }
 }
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TimeZoneInfo {
@@ -344,6 +347,32 @@ pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> 
   }
 }
 
+pub async fn fetch_timezone_from_place_reference(place: &str, cc: &Option<String>, region: &Option<String>) -> Option<(TimeZoneInfo, Coords)> {
+  let rows = search_by_fuzzy_names(place, cc, region, None, false, true, 4).await;
+  if let Some(first) = rows.get(0) {
+    let zi_opt = fetch_tz_from_geonames(first.lat, first.lng).await;
+    if let Some(zi) = zi_opt {
+      Some((zi, Coords::new(first.lat, first.lng)))
+    } else {
+      None
+    }
+  } else {
+    None
+  }
+}
+
+pub async fn extract_zone_name_from_place_params(params: &Query<InputOptions>) -> Option<(TimeZoneInfo, Coords)> {
+  let place_ref = params.place.clone().unwrap_or("".to_string());
+  let has_place = place_ref.len() > 2;
+  let cc_ref = params.cc.clone().unwrap_or("".to_owned());
+  let has_cc = cc_ref.len() > 1 && cc_ref.len() < 4;
+  let cc = if has_cc { Some(cc_ref) } else { None };
+  let match_by_place = has_place && has_cc;
+  let reg_ref = if match_by_place { params.reg.clone().unwrap_or("".to_owned()) } else { "".to_owned() };
+  let region = if reg_ref.len() > 1 { Some(reg_ref) } else { None };
+  fetch_timezone_from_place_reference(&place_ref, &cc, &region).await
+}
+
 pub fn extract_best_lat_lng_from_placenames(placenames: &Vec<GeoNameRow>, lat: f64, lng: f64) -> (f64, f64) {
   if let Some(last_row) = placenames.last() {
     (last_row.lat, last_row.lng)
@@ -481,15 +510,20 @@ pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str, e
   }
 }
 
-pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, fuzzy: Option<f32>, all_classes: bool, included: bool, max_rows: u8) -> Vec<GeoNameRow> {
+pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, all_classes: bool, included: bool, max_rows: u8) -> Vec<GeoNameRow> {
   let url = format!("{}/{}", GEONAMES_API_BASE, "searchJSON"); 
   let client = get_cached_http_client();
   let uname = match_geonames_username();
   let fuzzy_int = if let Some(f_int) = fuzzy { f_int } else { 1f32 };
   let fuzzy_string = fuzzy_int.to_string();
+  let mut search_str: String = search.to_owned().clone();
+  if let Some(rg_str) = region {
+    search_str.push_str(" ");
+    search_str.push_str(rg_str);
+  }
   let mut items: Vec<(&str, &str)> = vec![
         ("username", &uname),
-        ("q", search),
+        ("q", &search_str),
         ("fuzzy", &fuzzy_string)];
   if !all_classes {
     items.push(("featureClass", "P"));
@@ -533,9 +567,9 @@ pub fn matches_alternative(search: &str) -> Option<String> {
   }
 }
 
-pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
+pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
   let max_initial_search = if max < 10 { 20 } else if max < 127 {  max * 2 } else { 255 };
-  let items = search_by_fuzzy_names(search, cc, fuzzy, false, true, max_initial_search).await;
+  let items = search_by_fuzzy_names(search, cc, region, fuzzy, false, true, max_initial_search).await;
   let mut rows: Vec<GeoNameSimple> = Vec::new();
   let mut keys: Vec<String> = Vec::new();
   let mut count: usize = 0;
@@ -595,4 +629,8 @@ fn simplify_string(text: &str) -> String {
 fn string_to_static_str(value: u8) -> &'static str {
   let s = value.to_string();
   Box::leak(s.into_boxed_str())
+}
+
+pub fn is_valid_zone_name(zn: &str) -> bool {
+  zn.len() > 4 && zn.contains("/") && !zn.ends_with("/") && !zn.starts_with("/")
 }
