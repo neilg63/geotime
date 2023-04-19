@@ -51,7 +51,7 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   }
   let enforce_dst = params.dst.unwrap_or(1) > 0;
   reset_override();
-  let info = match has_zn {
+  let result = match has_zn {
     true => match_current_time_zone(&zn, &corrected_dt, None, enforce_dst),
     _ => {
       let ref_coords = if let Some(coords) = coords_option {
@@ -61,8 +61,13 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
       };
       fetch_time_info_from_coords_adjusted(ref_coords, &corrected_dt, local, enforce_dst).await
     }
-  };  
-  Json(json!(info))
+  };
+  let json_info = if let Some(data) = result {
+    json!(data)
+  } else {
+    json!({ "valid": false, "message": "Cannot identify a time zone from the query parameters" })
+  };
+  Json(json_info)
 }
 
 #[get("/search")]
