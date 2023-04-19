@@ -64,6 +64,11 @@ Query string parameters
 - dtl: Local date or date-time expressed as yyyy-mm-dd (2000-01-01) or yyyy-mm-ddTHH:MM:SS (2000-01-01T12:00:00) with optional seconds
 - jd: Decimal julian day as an alternative to datetime
 - un: Unix timestamp. Dates before midnight 1 Jan 1970 UTC are negative integers.
+- zn: Canonical zone name if known e.g. Asia/Kolkata or Europe/Amsterdam. This serves as an alternative to _lat,lng_ coordinates and avoids an extra GeoNames lookup and may hence be marginally faster.
+- zn: Zone name, e.g. Asia/Kolkata:
+- place: Place name search string, only used in combination with the _cc_ for country code, as an alternative to coordinates or zone names. This works best for major towns and cities. To avoid conflicts in countries with multiple time zones, you may specify a region with the _reg_ parameter.
+- cc: Country code, required with the _place_ parameter for this endpoint
+- reg: Region (state, province) optionally used with _place_ parameter
 
 The current time will be used if none is specified.
 
@@ -99,7 +104,6 @@ Query string parameters
 - dtl: Local date or date-time expressed as yyyy-mm-dd (2000-01-01) or yyyy-mm-ddTHH:MM:SS (2000-01-01T12:00:00) with optional seconds
 - jd: Decimal julian day as an alternative to datetime
 - un: Unix timestamp. Dates before midnight 1 Jan 1970 UTC are negative integers.
-- zn: Canonical zone name if known e.g. Asia/Kolkata or Europe/Amsterdam (this will avoid an extra GeoNames lookup and may be marginally faster)
 
 If no time is specified, the current time will be used.
 
