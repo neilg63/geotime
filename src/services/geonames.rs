@@ -1,9 +1,11 @@
 use actix_web::web::Query;
+use mysql::prelude::Queryable;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
 use regex::{Regex};
 use diacritics::*;
+use crate::data::mysql::connect_mysql;
 use crate::lib::coords::Coords;
 use crate::lib::date_conv::iso_string_to_datetime;
 use crate::query_params::InputOptions;
@@ -99,13 +101,147 @@ impl GeoNameRow {
     }
 
     pub fn to_simple(&self) -> GeoNameSimple {
-      GeoNameSimple { lng: self.lng, lat: self.lat, text: self.text() }
+      GeoNameSimple { lng: self.lng, lat: self.lat, text: self.text(), zone_name: None }
     }
 
     pub fn to_key(&self) -> String {
       format!("{}_{}_{}_{}_{}", self.name, self.admin_name.clone().unwrap_or("".to_string()), self.country_code.clone().unwrap_or("".to_string()), self.lat.floor(), self.lng.floor())
     }
 
+    pub fn weighted_pop(&self) -> u64 {
+      if self.fcode.starts_with("P") {
+        self.pop as u64 * 8u64
+      } else {
+        self.pop as u64
+      }
+    }
+
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Locality {
+  name: String,
+  ascii_name:	String,
+  admin_name: String,
+  lat: f64,
+  lng:	f64,
+  cc: String,
+  population: u32,
+  zone_name: String,
+}
+
+impl Locality {
+    pub fn new(name: String, ascii_name: String, admin_name: String, lat: f64, lng: f64, cc: String, population: u32, zone_name: String) -> Locality {
+      Locality {
+        name,
+        ascii_name,
+        admin_name,
+        lat,
+        lng,
+        cc,
+        population,
+        zone_name,
+      }
+    }
+
+  pub fn weight(&self, text: &str) -> u32 {
+    let plain = self.ascii_name.to_lowercase();
+    let normal = self.name.to_lowercase();
+    let mut match_plain = false;
+    let mut pos = plain.find(text).unwrap_or(20) as u32;
+    if pos > 12 {
+      let pos2 = normal.find(text).unwrap_or(20) as u32;
+      if pos2 < pos {
+        pos = pos2;
+        match_plain = false;
+      }
+    }
+    let ref_name = if match_plain { plain } else { normal };
+    let words: Vec<String> = ref_name.split(" ").into_iter().map(|s| s.to_owned()).collect::<Vec<String>>();
+    let start_word_index = words.clone().into_iter().position(|s| s.to_owned().starts_with(text)).unwrap_or(10);
+    let word_lens = words.into_iter().map(|s| s.len()).collect::<Vec<usize>>();
+    let mut main_word_index = 0;
+    let mut max_len = 0;
+    let mut index: usize = 0;
+    for wl in word_lens {
+      if wl > max_len {
+        max_len = wl;
+        main_word_index = index;
+      }
+      index += 1;
+    }
+    let exact_match: u32 = if ref_name == text { if ref_name.len() > 3 { 4 } else { 3 } } else { 2 };
+    let start_weight: u32 = if start_word_index == main_word_index { 2 } else { 1 };
+    let weight: u32 = if pos <= 20 { 20 - pos } else { 0 };
+    ((self.population + 5000) / 800) * weight * start_weight * exact_match
+  }
+
+  pub fn cc_suffix(&self) -> String {
+    if self.cc.len() > 1 {
+      format!(" ({})", self.cc)
+    } else {
+      "".to_owned()
+    }
+  }
+
+  pub fn admin_suffix(&self) -> String {
+    if self.admin_name.len() > 1 && self.admin_name != self.cc {
+      format!(", {}", self.admin_name)
+    } else {
+      "".to_owned()
+    }
+  }
+
+  pub fn text(&self) -> String {
+    format!("{}{}{}", self.name, self.admin_suffix(), self.cc_suffix())
+  }
+
+
+  pub fn to_simple(&self) -> GeoNameSimple {
+    GeoNameSimple {
+      lng: self.lng,
+      lat: self.lat,
+      text: self.text(), 
+      zone_name: Some(self.zone_name.clone())
+    }
+  }
+}
+
+pub fn fetch_locality_rows(sql: String) -> Vec<Locality> {
+    if let Ok(mut conn) = connect_mysql() {
+        let results = conn
+        .query_map( sql,
+            |(name, ascii_name, admin_name, lat, lng, cc, population, zone_name)| {
+                Locality::new(name, ascii_name, admin_name, lat, lng, cc, population, zone_name)
+            },
+        );
+        if let Ok(zones) = results {
+            if zones.len() > 0 {
+                zones
+            } else {
+                vec![]
+            }
+        } else {
+            vec![]
+        }
+    } else {
+        vec![]
+    }
+}
+
+
+
+pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality> {
+  let limit = if max < 40 { max + 10 } else if max < 80 { max + 20 } else if max < 225 { max + 30 } else { 255 };
+  let cc_ref = if let Some(cc_str) = cc { cc_str.to_owned().to_uppercase() } else { "".to_owned() };
+  let cc_len = cc_ref.len();
+  let has_cc = cc_ref != "ALL" && cc_len > 1 && cc_len < 3;
+  let country_clause = if has_cc { format!(" AND cc = '{}'", cc_ref) } else { "".to_owned() };
+  let sql = format!("select name, ascii_name, admin_name, lat, lng, cc, population, zone_name from cities WHERE (name REGEXP '[[:<:]]{}' OR ascii_name REGEXP '[[:<:]]{}') {} ORDER BY population DESC LIMIT {}", text,text, country_clause, limit);
+  let mut rows = fetch_locality_rows(sql);
+  let lc_text = text.to_lowercase();
+  rows.sort_by(|a, b| b.weight(&lc_text).cmp(&a.weight(&lc_text)));
+  rows
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -113,6 +249,8 @@ pub struct GeoNameSimple {
     pub lng: f64,
     pub lat: f64,
     pub text: String,
+    #[serde(rename="zoneName",skip_serializing_if = "Option::is_none")]
+    pub zone_name: Option<String>
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -291,6 +429,7 @@ pub async fn map_json_to_geoname_rows(output: Option<Map<String, Value>>, lat_ln
         }
       }
   }
+  rows.sort_by(|a,b| b.weighted_pop().partial_cmp(&a.weighted_pop()).unwrap());
   rows
 }
 
@@ -528,6 +667,7 @@ pub async fn search_by_fuzzy_names(search: &str, cc: &Option<String>, region: &O
   if !all_classes {
     items.push(("featureClass", "P"));
     items.push(("featureClass", "A"));
+    items.push(("orderby", "population"));
   }
   if let Some(cc_str) = cc {
     items.push(("country", &cc_str ));
@@ -569,7 +709,7 @@ pub fn matches_alternative(search: &str) -> Option<String> {
 
 pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
   let max_initial_search = if max < 10 { 20 } else if max < 127 {  max * 2 } else { 255 };
-  let items = search_by_fuzzy_names(search, cc, region, fuzzy, false, true, max_initial_search).await;
+  let items = search_by_fuzzy_names(search, cc, region, fuzzy, false, false, max_initial_search).await;
   let mut rows: Vec<GeoNameSimple> = Vec::new();
   let mut keys: Vec<String> = Vec::new();
   let mut count: usize = 0;
@@ -583,6 +723,35 @@ pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region:
         count += 1;
       }
     }
+  }
+  rows
+}
+
+pub async fn list_by_fuzzy_localities(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
+  let local_rows = if fuzzy.unwrap_or(100f32) < 91f32 { vec![] } else { match_locality(search, cc, max) };
+  let mut rows: Vec<GeoNameSimple> = Vec::new();
+  let str_len = search.len();
+  let min_long = if max < 2 { 0 } else if max < 5 { max - 2 } else if max < 20 { 5 } else { 6 } as usize;
+  let mut min = min_long;
+  if local_rows.len() > 0 {
+    let mut is_match = false;
+    if let Some(first) = local_rows.get(0) {
+      let first_len = if first.name.len() > str_len { first.name.len() } else { str_len };
+      let diff_len = first_len - str_len;
+      is_match = diff_len < 1;
+      min = 1;
+    }
+    if !is_match {
+      min = if str_len > 5 { min_long / 2 } else { min_long };
+    }
+    if min < 1 {
+      min = 1;
+    }
+  }
+  if local_rows.len() < min {
+    rows = list_by_fuzzy_name_match(search, cc, region, fuzzy, max).await;
+  } else {
+    rows = local_rows.into_iter().map(|row| row.to_simple()).collect();
   }
   rows
 }

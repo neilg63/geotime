@@ -91,8 +91,14 @@ pub async fn search_by_name(params: Query<InputOptions>) -> impl Responder {
     vec![]
   };
   let count = results.len();
+  let message = if has_search {
+    "OK"
+  } else {
+    "Please enter a place name search string with 2 or more letters via ?place=NAME"
+  };
   let info = json!({
     "count": count,
+    "message": message,
     "results": results
   });  
   Json(json!(info))
@@ -113,7 +119,27 @@ pub async fn lookup_by_name(params: Query<InputOptions>) -> impl Responder {
    } else { None };
   let region = params.reg.clone();
   let results = if has_search {
-    list_by_fuzzy_name_match(&place, &cc, &region, fuzzy_opt, max).await
+    //list_by_fuzzy_name_match(&place, &cc, &region, fuzzy_opt, max).await
+    list_by_fuzzy_localities(&place, &cc, &region, fuzzy_opt, max).await
+  } else {
+    vec![]
+  };
+  Json(json!(results))
+}
+
+#[get("/localities")]
+pub async fn lookup_by_locality_name(params: Query<InputOptions>) -> impl Responder {
+  let place: String = params.place.clone().unwrap_or("".to_string());
+  let has_search = place.len() > 1;
+  let cc_str = params.cc.clone().unwrap_or("".to_string());
+  let cc_len = cc_str.len();
+  let max_ref = params.max.unwrap_or(20);
+  let max = if max_ref > 0 { max_ref } else { 20 };
+  let cc = if cc_len > 1 && cc_len < 4 { 
+    Some(cc_str.to_uppercase())
+   } else { None };
+  let results = if has_search {
+    match_locality(&place, &cc, max)
   } else {
     vec![]
   };

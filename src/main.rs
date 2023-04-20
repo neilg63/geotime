@@ -40,6 +40,7 @@ async fn main()  -> std::io::Result<()> {
         .service(geo_time_info)
         .service(search_by_name)
         .service(lookup_by_name)
+        .service(lookup_by_locality_name)
         .route("/{sec1}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}/{sec3}", web::get().to(route_not_found))
