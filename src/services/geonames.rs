@@ -729,7 +729,6 @@ pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region:
 
 pub async fn list_by_fuzzy_localities(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
   let local_rows = if fuzzy.unwrap_or(100f32) < 91f32 { vec![] } else { match_locality(search, cc, max) };
-  let mut rows: Vec<GeoNameSimple> = Vec::new();
   let str_len = search.len();
   let min_long = if max < 2 { 0 } else if max < 5 { max - 2 } else if max < 20 { 5 } else { 6 } as usize;
   let mut min = min_long;
@@ -749,11 +748,10 @@ pub async fn list_by_fuzzy_localities(search: &str, cc: &Option<String>, region:
     }
   }
   if local_rows.len() < min {
-    rows = list_by_fuzzy_name_match(search, cc, region, fuzzy, max).await;
+    list_by_fuzzy_name_match(search, cc, region, fuzzy, max).await
   } else {
-    rows = local_rows.into_iter().map(|row| row.to_simple()).collect();
+    local_rows.into_iter().map(|row| row.to_simple()).collect()
   }
-  rows
 }
 
 fn is_in_geo_row(row: &GeoNameRow, search: &str) -> bool {
