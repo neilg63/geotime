@@ -1,6 +1,6 @@
 [package]
 name = "geotimezone"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -21,6 +21,7 @@ chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "3.2.5", features = ["derive"] }
 http-cache-reqwest = "0.5.0"
 reqwest-middleware = "0.1.6"
-regex = "1"
 diacritics = "0.2.0"
 globals = "1"
+julian_day_converter = "0.3.2"
+string-patterns = "0.2.12"
