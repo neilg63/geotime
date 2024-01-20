@@ -123,17 +123,21 @@ impl GeoNameRow {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Locality {
   name: String,
+  #[serde(rename="asciiName")]
   ascii_name:	String,
+  #[serde(rename="adminName")]
   admin_name: String,
   lat: f64,
   lng:	f64,
   cc: String,
   population: u32,
+  #[serde(rename="zoneName")]
   zone_name: String,
 }
 
 impl Locality {
     pub fn new(name: String, ascii_name: String, admin_name: String, lat: f64, lng: f64, cc: String, population: u32, zone_name: String) -> Locality {
+      let cc = correct_country_code(&cc);
       Locality {
         name,
         ascii_name,
@@ -719,6 +723,14 @@ pub fn correct_country_code_optional(cc_opt: Option<String>) -> Option<String> {
   } else {
     None
   }
+}
+
+pub fn correct_country_code(cc: &str) -> String {
+  if let Some((_cc, new_cc)) = CORRECTED_COUNTRY_CODES.into_iter().find(|pair| pair.0.to_owned() == cc) {
+    new_cc
+  } else {
+    cc
+  }.to_string()
 }
 
 pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {

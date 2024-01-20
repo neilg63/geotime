@@ -1197,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "geotimezone"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "actix-web",
  "chrono",
@@ -1206,17 +1206,18 @@ dependencies = [
  "dotenv",
  "globals",
  "http-cache-reqwest",
+ "julian_day_converter",
  "libmath",
  "mysql",
  "num",
  "num-derive",
  "num-traits",
- "regex",
  "reqwest",
  "reqwest-middleware",
  "serde",
  "serde_derive",
  "serde_json",
+ "string-patterns",
 ]
 
 [[package]]
@@ -1512,6 +1513,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3fac17f7123a73ca62df411b1bf727ccc805daa070338fda671c86dac1bdc27"
 dependencies = [
  "wasm-bindgen",
+]
+
+[[package]]
+name = "julian_day_converter"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b8b1d2decaeec65c1d9729098450800ffb40767dcab1b9be3e6e7eb21c6e7a5"
+dependencies = [
+ "chrono",
 ]
 
 [[package]]
@@ -2685,6 +2695,15 @@ name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
+name = "string-patterns"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "274a342d093ba75e1bb514171e4dc28cdd901acc11425862d5b757a050b2c233"
+dependencies = [
+ "regex",
+]
 
 [[package]]
 name = "strsim"

@@ -25,6 +25,7 @@ Exit the mysql prompt and import the SQL file as follows:
 ```
 mysql -u timezonedb -pmy_cryptic_password timezonedb < time_zone.sql
 ```
+I bundled a timezone database with the *time_zone* and *country* tables plus a *cities* lookup table from GeoNames for the localities endpoint
 
 ## Environment Variables
 
@@ -140,6 +141,17 @@ Query string parameters
 - fuzzy: on a scale from 0 to 100, 100 is the maximum tolerance of spelling and name association and 0 for exact matches only. The default is 100
 - max: number of results between 1 and 255, default: 20
 
+### GET /localities
+
+This provides a list of deduplicated place names, matching the letters after the place parameter in the query string. It is ideal for auto-complete lookups where you want to match a place name as entered with exact geographic coordinates.
+
+Query string parameters
+
+- place: Search string, which may include country or region names for disambiguation
+- cc: Optional two-letter country code to narrow searches to a given country
+- fuzzy: on a scale from 0 to 100, 100 is the maximum tolerance of spelling and name association and 0 for exact matches only. The default is 100
+- max: number of results between 1 and 255, default: 20
+
 #### Response
 
-- Array of objects with text (place name, region (CountryCode)), lat(itude) and l(o)ng(itude).
+- Array of objects with text (adminName, countryCode, name, fcode, population, lat(itude) and l(o)ng(itude) and zoneName.
