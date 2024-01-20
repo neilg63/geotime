@@ -3,17 +3,17 @@ use mysql::prelude::Queryable;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
-use regex::{Regex};
+use string_patterns::*;
 use diacritics::*;
 use crate::data::mysql::connect_mysql;
-use crate::lib::coords::Coords;
-use crate::lib::date_conv::iso_string_to_datetime;
+use crate::app::coords::Coords;
+use crate::app::date_conv::iso_string_to_datetime;
 use crate::query_params::InputOptions;
-use crate::{lib::date_conv::unixtime_to_utc, data::alternative_names::ALTERNATIVE_NAMES};
+use crate::{app::date_conv::unixtime_to_utc, data::alternative_names::ALTERNATIVE_NAMES};
 
 use crate::args::*;
 use super::timezonedb::*;
-use crate::{constants::*, lib::json_extract::*, lib::cached_http_client::*};
+use crate::{constants::*, app::json_extract::*, app::cached_http_client::*};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct GeoNameRow {
@@ -771,22 +771,12 @@ fn is_in_geo_row_alternative(row: &GeoNameRow, search: &str) -> bool {
   ok
 }
 
-fn build_regex(pat: &str, case_insensitive: bool) -> Regex {
-    let prefix = if case_insensitive { "(?i)" } else { "" };
-    let corrected_pattern = [prefix, pat].join("");
-    Regex::new(&corrected_pattern).unwrap()
-}
-
-fn pattern_matches(text: &str, pat: &str, case_insensitive: bool) -> bool {
-    let re = build_regex(pat, case_insensitive);
-    re.is_match(text)
-}
 
 fn is_in_simple_string(text: &String, search: &str) -> bool {
   let search_first = search.trim().split(" ").nth(0).unwrap_or("");
   let pat = remove_diacritics(search_first);
   let simple_text = remove_diacritics(text);
-  pattern_matches(&simple_text, &pat, true)
+  simple_text.pattern_match(&pat, true)
 }
 
 fn simplify_string(text: &str) -> String {

@@ -1,7 +1,7 @@
 
-use serde::{Deserialize};
-use actix_web::{web::{Query}};
-use super::lib::{date_conv::*, coords::*};
+use serde::Deserialize;
+use actix_web::web::Query;
+use super::app::{date_conv::*, coords::*};
 
 #[derive(Deserialize)]
 pub struct InputOptions {

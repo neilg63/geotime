@@ -1,9 +1,9 @@
 use serde::{Serialize, Deserialize};
 use mysql::prelude::*;
-use crate::lib::weekday_code::WeekdayCode;
+use crate::app::weekday_code::WeekdayCode;
 use crate::data::mysql::*;
-use crate::lib::date_conv::*;
-use chrono::{Datelike};
+use crate::app::date_conv::*;
+use chrono::Datelike;
 
 struct OffsetOverride {
   value: Option<i32>

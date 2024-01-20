@@ -5,7 +5,7 @@ extern crate chrono;
 mod args;
 mod constants;
 mod data;
-mod lib;
+mod app;
 mod services;
 mod query_params;
 mod routes;

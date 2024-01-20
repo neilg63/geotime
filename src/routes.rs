@@ -1,8 +1,8 @@
-use super::services::{timezonedb::*, geonames::*};
+use crate::services::{timezonedb::*, geonames::*};
 use serde_json::*;
 use actix_web::{get, Responder, web::{Query, Json}};
-use super::query_params::*;
-use super::lib::{coords::*};
+use crate::query_params::*;
+use crate::app::coords::*;
 
 pub async fn welcome() -> impl Responder {
   Json(json!({ "message": "Welcome to GeoTImeZone" }))
