@@ -5,6 +5,7 @@ use serde_json::*;
 use clap::Parser;
 use string_patterns::*;
 use diacritics::*;
+use crate::data::alternative_names::CORRECTED_COUNTRY_CODES;
 use crate::data::mysql::connect_mysql;
 use crate::app::coords::Coords;
 use crate::app::date_conv::iso_string_to_datetime;
@@ -37,7 +38,8 @@ impl GeoNameRow {
         let toponym = extract_string_from_value_map(&row, "toponymName");
         let fcode = extract_string_from_value_map(&row, "fcode");
         let pop = extract_u32_from_value_map(&row, "population");
-        let country_code = extract_optional_string_from_value_map(&row, "countryCode");
+        let cc = extract_optional_string_from_value_map(&row, "countryCode");
+        let country_code = correct_country_code_optional(cc);
         let admin_name = extract_optional_string_from_value_map(&row, "adminName1");
         GeoNameRow { 
             lng,
@@ -702,6 +704,18 @@ pub fn matches_alternative(search: &str) -> Option<String> {
   let pair_opt = ALTERNATIVE_NAMES.into_iter().find(|pair| simplify_string(pair.0).starts_with(&text));
   if let Some(pair) = pair_opt {
     Some(pair.1.to_owned())
+  } else {
+    None
+  }
+}
+
+pub fn correct_country_code_optional(cc_opt: Option<String>) -> Option<String> {
+  if let Some(cc) = cc_opt {
+    if let Some((_cc, new_cc)) = CORRECTED_COUNTRY_CODES.into_iter().find(|pair| pair.0.to_owned() == cc) {
+      Some(new_cc.to_string())
+    } else {
+      Some(cc)
+    }
   } else {
     None
   }

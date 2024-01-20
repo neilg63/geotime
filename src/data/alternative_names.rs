@@ -22,3 +22,11 @@ pub const ALTERNATIVE_NAMES: [(&'static str, &'static str); 11] = [
   ("München", "Munich"),
   ("Muenchen", "Munich"),
 ];
+
+/*
+* Preferred country codes that differ from those provided by GeoNames
+* (GEONAMES, PREFERRED)
+*/
+pub const CORRECTED_COUNTRY_CODES: [(&'static str, &'static str); 1] = [
+  ("GB", "UK"),
+];
