@@ -176,7 +176,7 @@ impl TimeZone {
     let diff_abs = self.next_diff_offset().abs();
     if self.secs_to_end() - offset < diff_abs {
       !next_back
-    } else if self.secs_since_start() < diff_abs {
+    } else if self.secs_since_start().abs() < diff_abs {
       next_back
     } else {
       false
