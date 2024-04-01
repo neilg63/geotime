@@ -1,5 +1,6 @@
 use actix_web::web::Query;
 use mysql::prelude::Queryable;
+use reqwest::Error;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
@@ -235,6 +236,30 @@ pub fn fetch_locality_rows(sql: String) -> Vec<Locality> {
     }
 }
 
+pub fn fetch_geoname_toponym_rows(sql: String) -> Vec<GeoNameNearby> {
+  if let Ok(mut conn) = connect_mysql() {
+    // from_row(distance: f64, lat: f64, lng: f64, name: &str, admin_name: &str, zn: &str, cc: &str, fcode: &str, pop: u32)
+    // lng, lat, name, cc, admin_name, zone_name, fcode, population,
+      let results = conn
+      .query_map( sql,
+          |(lat, lng, name, cc, admin_name, zn, fcode, population, distance)| {
+            GeoNameNearby::from_db_row(lat, lng, name, cc, admin_name, zn, fcode, population, distance )
+          },
+      );
+      if let Ok(zones) = results {
+          if zones.len() > 0 {
+              zones
+          } else {
+              vec![]
+          }
+      } else {
+          vec![]
+      }
+  } else {
+      vec![]
+  }
+}
+
 
 
 pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality> {
@@ -248,6 +273,22 @@ pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality>
   let lc_text = text.to_lowercase();
   rows.sort_by(|a, b| b.weight(&lc_text).cmp(&a.weight(&lc_text)));
   rows
+}
+
+pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<GeoNameNearby> {
+  let min_lng = lng - tolerance;
+  let max_lng = lng + tolerance;
+  let min_lat = lat - tolerance;
+  let max_lat = lat + tolerance;
+  let sql = format!("SELECT lng, lat, name, cc, admin_name, zone_name, fcode, population, (
+    6371 * acos(
+      cos(radians({})) * cos(radians(x(g))) * cos(radians(y(g)) - radians({}))
+      +
+      sin(radians({})) * sin(radians(x(g)))
+    )
+  ) AS distance FROM toponyms WHERE admin_name IS NOT null AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  let rows = fetch_geoname_toponym_rows(sql);
+  rows.get(0).map(|row| row.to_owned())
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -268,8 +309,12 @@ pub struct GeoNameNearby {
     pub fcode: String,
     pub distance: f64,
     pub pop: u32,
+    #[serde(rename="adminName")]
     pub admin_name: String,
+    #[serde(rename="countryName")]
     pub country_name: String,
+    #[serde(rename="zoneName",skip_serializing_if = "Option::is_none")]
+    pub zone_name: Option<String>
 }
 
 impl GeoNameNearby {
@@ -284,15 +329,33 @@ impl GeoNameNearby {
     let pop = extract_u32_from_value_map(&row, "population");
     let distance = extract_f64_from_value_map(&row, "distance");
     GeoNameNearby { 
+      lng,
+      lat,
+      name,
+      toponym,
+      fcode,
+      distance,
+      pop,
+      admin_name,
+      country_name,
+      zone_name: None
+    }
+  }
+
+  pub fn from_db_row(lat: f64, lng: f64, name: String, cc: String, admin_name: String, zn: String, fcode: String, pop: u32, distance: f64) -> GeoNameNearby {
+    let admin_name = admin_name.to_string();
+    let country_name = correct_country_code(&cc);
+    GeoNameNearby { 
         lng,
         lat,
-        name,
-        toponym,
+        name: name.clone(),
+        toponym: name,
         fcode,
         distance,
         pop,
         admin_name,
         country_name,
+        zone_name: Some(zn.to_string()),
     }
   }
 
@@ -320,6 +383,13 @@ impl TimeZoneInfo {
             cc,
             tz
         }
+    }
+
+    pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
+      TimeZoneInfo { 
+        cc: cc.to_string(),
+        tz: tz.to_string()
+    }
     }
 }
 
@@ -358,7 +428,8 @@ pub async fn fetch_from_geonames(method: &str, lat: f64, lng: f64) -> Option<Map
   let lat_str = lat.to_string();
   let lng_str = lng.to_string();
   let uname = match_geonames_username();
-  //let client = reqwest::Client::new();
+  
+  // let client = reqwest::Client::new();
   let client = get_cached_http_client();
   let result = match method {
     "findNearbyJSON" => client.get(url).query(&[
@@ -479,6 +550,7 @@ pub async fn fetch_nearby_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow> {
 
 pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> {
   let data = fetch_from_geonames("timezoneJSON", lat, lng).await;
+
   match data {
       Some(item_data) => {
         let tz_data = TimeZoneInfo::new(item_data);
@@ -542,7 +614,12 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
 }
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
-  let placenames = fetch_extended_from_geonames(lat, lng).await;
+  let nearby_row_opt = match_toponym_proximity(lat, lng, 2.0);
+  let placenames = if let Some(nb_row) = nearby_row_opt {
+    nb_row.to_rows()
+  } else {
+    fetch_extended_from_geonames(lat, lng).await
+  };
   let mut time: Option<TimeZone> = None;
   let mut time_matched = false;
   let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&placenames, lat, lng);
@@ -566,7 +643,7 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_d
 
 pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) ->String {
   let mut adjusted_dt = utc_string.to_owned();
-  if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst).await {
+  if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst, true).await {
     if let Some(unix_ts) = tz_info.ref_unix {
       let adjusted_unix_time = unix_ts - tz_info.offset();
       let next_adjusted_unix_time = adjusted_unix_time + tz_info.next_diff_offset();
@@ -581,7 +658,7 @@ pub async fn fetch_adjusted_date_str(lat: f64, lng: f64, utc_string: &str, enfor
             adjusted_dt = unixtime_to_utc(unix_ts - tz_info.next_diff_offset().abs());
           }
         }
-        if let Some(tzi) = fetch_time_info_from_coords(lat, lng, &adjusted_dt, enforce_dst).await {
+        if let Some(tzi) = fetch_time_info_from_coords(lat, lng, &adjusted_dt, enforce_dst, true).await {
           let ref_offset = if enforce_dst { tzi.offset() } else { tzi.offset() - tzi.next_diff_offset().abs() };
           let ts = unix_ts - ref_offset;
           adjusted_dt = unixtime_to_utc(ts);
@@ -605,12 +682,12 @@ fn abbreviate_ocean_name(row: &GeoNameRow) -> String {
 
 pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &str, local: bool, enforce_dst: bool) -> Option<TimeZone> {
   if local {
-    if let Some(tz_info) = fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst).await {
+    if let Some(tz_info) = fetch_time_info_from_coords_db(lat, lng, utc_string, enforce_dst).await {
       if let Some(unix_ts) = tz_info.ref_unix {
         let adjusted_unix_time = unix_ts - tz_info.gmt_offset as i64;
         if tz_info.gmt_offset != 0 {
           let adjust_dt_str = unixtime_to_utc(adjusted_unix_time);
-          fetch_time_info_from_coords(lat, lng, &adjust_dt_str, enforce_dst).await
+          fetch_time_info_from_coords_db(lat, lng, &adjust_dt_str, enforce_dst).await
         } else {
           Some(tz_info)
         }
@@ -622,7 +699,7 @@ pub async fn fetch_time_info_from_coords_local(lat: f64, lng: f64, utc_string: &
       None
     }
   } else {
-    fetch_time_info_from_coords(lat, lng, utc_string, false).await
+    fetch_time_info_from_coords_db(lat, lng, utc_string, false).await
   }
 }
 
@@ -631,8 +708,24 @@ pub async fn fetch_time_info_from_coords_adjusted(coords: Coords, utc_string: &s
   fetch_time_info_from_coords_local(coords.lat, coords.lng, &adjusted_dt, false, enforce_dst).await
 }
 
-pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> Option<TimeZone> {
+pub async fn fetch_time_info_from_coords_db(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> Option<TimeZone> {
+  let data = fetch_geo_time_info(lat, lng, utc_string, enforce_dst).await;
+  let result = match data.time {
+    Some(time) => Some(time),
+    _ => {
+      None
+    }
+  };
+  if result.is_none() {
+    fetch_time_info_from_coords(lat, lng, utc_string, enforce_dst, true).await
+  } else {
+    result
+  }
+}
+
+pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool, skip_fallback: bool) -> Option<TimeZone> {
   if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
+   
       match_current_time_zone(&tz_item.tz, utc_string, Some(lng), enforce_dst)
   } else {
     let rows = fetch_nearby_from_geonames(lat, lng).await;
@@ -644,12 +737,16 @@ pub async fn fetch_time_info_from_coords(lat: f64, lng: f64, utc_string: &str, e
         extract_time_from_first_row(&rows, lng, utc_string)
       }
     } else {
-      let data = fetch_geo_time_info(lat, lng, utc_string, enforce_dst).await;
-      match data.time {
-        Some(time) => Some(time),
-        _ => {
-          None
+      if !skip_fallback {
+        let data = fetch_geo_time_info(lat, lng, utc_string, enforce_dst).await;
+        match data.time {
+          Some(time) => Some(time),
+          _ => {
+            None
+          }
         }
+      } else {
+        None
       }
     }
   }

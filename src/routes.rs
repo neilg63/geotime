@@ -42,6 +42,7 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let coords_option = match_coords_from_params(&params);
   let (corrected_dt, local) = match_datetime_from_params(&params);
   let has_coords = coords_option.is_some();
+  
   if !has_zn && !has_coords { 
     let tz_info_opt = extract_zone_name_from_place_params(&params).await;
     if let Some((tz_info, _coords)) = tz_info_opt {
@@ -68,6 +69,19 @@ pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
     json!({ "valid": false, "message": "Cannot identify a time zone from the query parameters" })
   };
   Json(json_info)
+}
+
+#[get("/nearby")]
+pub async fn nearby_info(params: Query<InputOptions>) -> impl Responder {
+  let coords_option = match_coords_from_params(&params);
+  let mut result = json!({"valid": false });
+  if let Some(coords) = coords_option {
+    let tolerance = params.fuzzy.unwrap_or(1) as f64;
+    if let Some(data) = match_toponym_proximity(coords.lat, coords.lng, tolerance) {
+      result = json!(data);
+    }
+  }
+  Json(result)
 }
 
 #[get("/search")]
