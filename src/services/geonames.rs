@@ -387,12 +387,12 @@ impl TimeZoneInfo {
         }
     }
 
-/*     pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
-      TimeZoneInfo { 
-        cc: cc.to_string(),
-        tz: tz.to_string()
-      }
-    } */
+  pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
+    TimeZoneInfo { 
+      cc: cc.to_string(),
+      tz: tz.to_string()
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -617,25 +617,34 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
   let nearby_row_opt = match_toponym_proximity(lat, lng, 1.25);
-  let placenames = if let Some(nb_row) = nearby_row_opt {
+  let placenames = if let Some(nb_row) = nearby_row_opt.clone() {
     nb_row.to_rows()
   } else {
     fetch_extended_from_geonames(lat, lng).await
   };
-  let mut time: Option<TimeZone> = None;
-  let mut time_matched = false;
-  let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&placenames, lat, lng);
-
-  if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
-    if tz_item.tz.len() > 2 {
-      time = match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(lng), enforce_dst);
-      if let Some(time_row) = time.clone() {
-        time_matched = time_row.zone_name.len() > 2;
+  let mut time: Option<TimeZone> = if let Some(nb_row) = nearby_row_opt {
+    if let Some(zn) = nb_row.zone_name {
+      match_current_time_zone(&zn, utc_string, Some(lng), enforce_dst)
+    } else {
+      None
+    }
+  } else {
+    None
+  };
+  let mut time_matched = time.is_some();
+  if !time_matched {
+    let (best_lat, best_lng) = extract_best_lat_lng_from_placenames(&placenames, lat, lng);
+    if let Some(tz_item) = fetch_tz_from_geonames(best_lat, best_lng).await {
+      if tz_item.tz.len() > 2 {
+        time = match_current_time_zone(tz_item.tz.as_str(), utc_string, Some(lng), enforce_dst);
+        if let Some(time_row) = time.clone() {
+          time_matched = time_row.zone_name.len() > 2;
+        }
       }
     }
-  }
-  if !time_matched && placenames.len() > 0 {
-    time = extract_time_from_first_row(&placenames, lng, utc_string);
+    if !time_matched && placenames.len() > 0 {
+      time = extract_time_from_first_row(&placenames, lng, utc_string);
+    }
   }
   GeoTimeInfo { 
     placenames,
