@@ -387,12 +387,12 @@ impl TimeZoneInfo {
         }
     }
 
-  pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
+/*   pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
     TimeZoneInfo { 
       cc: cc.to_string(),
       tz: tz.to_string()
     }
-  }
+  } */
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
