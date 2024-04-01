@@ -285,7 +285,8 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
       +
       sin(radians({})) * sin(radians(x(g)))
     )
-  ) AS distance FROM toponyms WHERE admin_name IS NOT null AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1') AND admin_name IS NOT null AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  println!("{}", sql);
   let rows = fetch_geoname_toponym_rows(sql);
   rows.get(0).map(|row| row.to_owned())
 }
@@ -384,12 +385,12 @@ impl TimeZoneInfo {
         }
     }
 
-    pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
+/*     pub fn from_strs(tz: &str, cc: &str) -> TimeZoneInfo {
       TimeZoneInfo { 
         cc: cc.to_string(),
         tz: tz.to_string()
-    }
-    }
+      }
+    } */
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
