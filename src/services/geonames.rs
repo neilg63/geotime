@@ -362,7 +362,9 @@ impl GeoNameNearby {
   pub fn to_rows(&self) -> Vec<GeoNameRow> {
       let mut rows: Vec<GeoNameRow> = vec![];
       rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.country_name.clone(), "PCLI".to_string(), 0));
-      rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), "ADM1".to_string(), 0));
+      if self.admin_name.len() > 0 {
+        rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), "ADM1".to_string(), 0));
+      }
       rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.name.clone(), self.fcode.clone(), self.pop));
       rows
   }
