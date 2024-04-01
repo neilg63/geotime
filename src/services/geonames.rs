@@ -285,7 +285,7 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
       +
       sin(radians({})) * sin(radians(x(g)))
     )
-  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1') AND admin_name IS NOT null AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
   println!("{}", sql);
   let rows = fetch_geoname_toponym_rows(sql);
   rows.get(0).map(|row| row.to_owned())
@@ -614,7 +614,7 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
 }
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
-  let nearby_row_opt = match_toponym_proximity(lat, lng, 2.0);
+  let nearby_row_opt = match_toponym_proximity(lat, lng, 1.25);
   let placenames = if let Some(nb_row) = nearby_row_opt {
     nb_row.to_rows()
   } else {
