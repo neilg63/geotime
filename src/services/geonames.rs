@@ -1,6 +1,5 @@
 use actix_web::web::Query;
 use mysql::prelude::Queryable;
-use reqwest::Error;
 use serde::{Serialize, Deserialize};
 use serde_json::*;
 use clap::Parser;
