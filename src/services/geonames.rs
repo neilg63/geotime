@@ -82,6 +82,19 @@ impl GeoNameRow {
       }
     }
 
+    pub fn new_with_country_name(lat: f64, lng: f64, name: String, full_name: String, fcode: String, pop: u32) -> GeoNameRow {
+      GeoNameRow { 
+        lng,
+        lat,
+        name: name.clone(),
+        toponym: full_name,
+        fcode,
+        pop,
+        country_code: None,
+        admin_name: None,
+      }
+    }
+
     pub fn cc_suffix(&self) -> String {
       if let Some(cc) = self.country_code.clone() {
         format!(" ({})", cc)
@@ -118,6 +131,25 @@ impl GeoNameRow {
       }
     }
 
+}
+
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct CountryRow {
+  #[serde(rename="countryCode")]
+  pub country_code: String,
+  #[serde(rename="countryName")]
+  pub country_name: String,
+}
+
+impl CountryRow {
+  pub fn new(cc: String, name: String) -> Self {
+    CountryRow {
+      country_code: cc,
+      country_name: name,
+    }
+  }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -235,6 +267,22 @@ pub fn fetch_locality_rows(sql: String) -> Vec<Locality> {
     }
 }
 
+pub fn extract_country_name(sql: String) -> Option<String> {
+  if let Ok(mut conn) = connect_mysql() {
+      let result = conn
+        .query_map(sql, |(country_code, country_name)| {
+          CountryRow::new(country_code, country_name)
+        },
+      );
+      if let Ok(rows) = result {
+        if let Some(row) = rows.get(0) {
+          return Some(row.country_name.to_owned());
+        }
+      }
+  }
+  None
+}
+
 pub fn fetch_geoname_toponym_rows(sql: String) -> Vec<GeoNameNearby> {
   if let Ok(mut conn) = connect_mysql() {
     // from_row(distance: f64, lat: f64, lng: f64, name: &str, admin_name: &str, zn: &str, cc: &str, fcode: &str, pop: u32)
@@ -289,6 +337,13 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
   
   let rows = fetch_geoname_toponym_rows(sql);
   rows.get(0).map(|row| row.to_owned())
+}
+
+pub fn match_country_name(cc: &str) -> Option<String> {
+  let code = recorrect_country_code(cc).to_uppercase();
+  let sql = format!("select * FROM country WHERE country_code = '{}' LIMIT 1", code);
+  
+  extract_country_name(sql)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -361,7 +416,9 @@ impl GeoNameNearby {
 
   pub fn to_rows(&self) -> Vec<GeoNameRow> {
       let mut rows: Vec<GeoNameRow> = vec![];
-      rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.country_name.clone(), "PCLI".to_string(), 0));
+      let cc = self.country_name.clone(); // country name is the code when it comes from toponyms is mapped to the name field
+      let full_name = match_country_name(&self.country_name).unwrap_or(cc.clone());
+      rows.push(GeoNameRow::new_with_country_name(self.lat, self.lng, cc, full_name, "PCLI".to_string(), 0));
       if self.admin_name.len() > 0 {
         rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), "ADM1".to_string(), 0));
       }
@@ -836,6 +893,14 @@ pub fn correct_country_code_optional(cc_opt: Option<String>) -> Option<String> {
 pub fn correct_country_code(cc: &str) -> String {
   if let Some((_cc, new_cc)) = CORRECTED_COUNTRY_CODES.into_iter().find(|pair| pair.0.to_owned() == cc) {
     new_cc
+  } else {
+    cc
+  }.to_string()
+}
+
+pub fn recorrect_country_code(cc: &str) -> String {
+  if let Some((table_cc, _other_cc)) = CORRECTED_COUNTRY_CODES.into_iter().find(|pair| pair.1.to_owned() == cc) {
+    table_cc
   } else {
     cc
   }.to_string()
