@@ -328,7 +328,7 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
   let max_lng = lng + tolerance;
   let min_lat = lat - tolerance;
   let max_lat = lat + tolerance;
-  let sql = format!("SELECT lng, lat, name, cc, admin_name, zone_name, fcode, population, (
+  let sql = format!("SELECT lat, lng, name, cc, admin_name, zone_name, fcode, population, (
     6371 * acos(
       cos(radians({})) * cos(radians(x(g))) * cos(radians(y(g)) - radians({}))
       +
