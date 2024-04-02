@@ -316,6 +316,7 @@ pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality>
   let has_cc = cc_ref != "ALL" && cc_len > 1 && cc_len < 3;
   let country_clause = if has_cc { format!(" AND cc = '{}'", cc_ref) } else { "".to_owned() };
   let sql = format!("select name, ascii_name, admin_name, lat, lng, cc, population, zone_name from cities WHERE (name REGEXP '[[:<:]]{}' OR ascii_name REGEXP '[[:<:]]{}') {} ORDER BY population DESC LIMIT {}", text,text, country_clause, limit);
+  
   let mut rows = fetch_locality_rows(sql);
   let lc_text = text.to_lowercase();
   rows.sort_by(|a, b| b.weight(&lc_text).cmp(&a.weight(&lc_text)));
@@ -927,7 +928,10 @@ pub async fn list_by_fuzzy_name_match(search: &str, cc: &Option<String>, region:
 }
 
 pub async fn list_by_fuzzy_localities(search: &str, cc: &Option<String>, region: &Option<String>, fuzzy: Option<f32>, max: u8) -> Vec<GeoNameSimple> {
-  let local_rows = if fuzzy.unwrap_or(100f32) < 91f32 { vec![] } else { match_locality(search, cc, max) };
+  let fuzzy_val = fuzzy.unwrap_or(100f32);
+  let search_remote = fuzzy.unwrap_or(100f32) < 91f32;
+  let search_again = fuzzy_val >= 150.0;
+  let local_rows = if search_remote { vec![] } else { match_locality(search, cc, max) };
   let str_len = search.len();
   let min_long = if max < 2 { 0 } else if max < 5 { max - 2 } else if max < 20 { 5 } else { 6 } as usize;
   let mut min = min_long;
@@ -946,7 +950,7 @@ pub async fn list_by_fuzzy_localities(search: &str, cc: &Option<String>, region:
       min = 1;
     }
   }
-  if local_rows.len() < min {
+  if local_rows.len() < min && search_again {
     list_by_fuzzy_name_match(search, cc, region, fuzzy, max).await
   } else {
     local_rows.into_iter().map(|row| row.to_simple()).collect()
