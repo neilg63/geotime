@@ -334,7 +334,7 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
       +
       sin(radians({})) * sin(radians(x(g)))
     )
-  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
   
   let rows = fetch_geoname_toponym_rows(sql);
   rows.get(0).map(|row| row.to_owned())
