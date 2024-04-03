@@ -289,8 +289,8 @@ pub fn fetch_geoname_toponym_rows(sql: String) -> Vec<GeoNameNearby> {
     // lng, lat, name, cc, admin_name, zone_name, fcode, population,
       let results = conn
       .query_map( sql,
-          |(lat, lng, name, cc, admin_name, zn, fcode, population, distance)| {
-            GeoNameNearby::from_db_row(lat, lng, name, cc, admin_name, zn, fcode, population, distance )
+          |(lat, lng, name, cc, region, admin_name, zn, fcode, population, distance)| {
+            GeoNameNearby::from_db_row(lat, lng, name, cc, region, admin_name, zn, fcode, population, distance )
           },
       );
       if let Ok(zones) = results {
@@ -328,13 +328,13 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
   let max_lng = lng + tolerance;
   let min_lat = lat - tolerance;
   let max_lat = lat + tolerance;
-  let sql = format!("SELECT lat, lng, name, cc, admin_name, zone_name, fcode, population, (
+  let sql = format!("SELECT lat, lng, name, cc, region, admin_name, zone_name, fcode, population, (
     6371 * acos(
       cos(radians({})) * cos(radians(x(g))) * cos(radians(y(g)) - radians({}))
       +
       sin(radians({})) * sin(radians(x(g)))
     )
-  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP', 'AIRQ') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
   
   let rows = fetch_geoname_toponym_rows(sql);
   rows.get(0).map(|row| row.to_owned())
@@ -367,6 +367,7 @@ pub struct GeoNameNearby {
     pub pop: u32,
     #[serde(rename="adminName")]
     pub admin_name: String,
+    pub region: String,
     #[serde(rename="countryName")]
     pub country_name: String,
     #[serde(rename="zoneName",skip_serializing_if = "Option::is_none")]
@@ -378,7 +379,8 @@ impl GeoNameNearby {
     let lng = extract_f64_from_value_map(&row, "lng");
     let lat = extract_f64_from_value_map(&row, "lat");
     let name = extract_string_from_value_map(&row, "name");
-    let admin_name = extract_string_from_value_map(&row, "adminName1");
+    let region = extract_string_from_value_map(&row, "adminName1");
+    let admin_name = extract_string_from_value_map(&row, "adminName2");
     let country_name = extract_string_from_value_map(&row, "countryName");
     let toponym = extract_string_from_value_map(&row, "toponymName");
     let fcode = extract_string_from_value_map(&row, "fcode");
@@ -393,12 +395,13 @@ impl GeoNameNearby {
       distance,
       pop,
       admin_name,
+      region,
       country_name,
       zone_name: None
     }
   }
 
-  pub fn from_db_row(lat: f64, lng: f64, name: String, cc: String, admin_name: String, zn: String, fcode: String, pop: u32, distance: f64) -> GeoNameNearby {
+  pub fn from_db_row(lat: f64, lng: f64, name: String, cc: String, region:String, admin_name: String, zn: String, fcode: String, pop: u32, distance: f64) -> GeoNameNearby {
     let admin_name = admin_name.to_string();
     let country_name = correct_country_code(&cc);
     GeoNameNearby { 
@@ -410,6 +413,7 @@ impl GeoNameNearby {
         distance,
         pop,
         admin_name,
+        region,
         country_name,
         zone_name: Some(zn.to_string()),
     }
@@ -420,8 +424,15 @@ impl GeoNameNearby {
       let cc = self.country_name.clone(); // country name is the code when it comes from toponyms is mapped to the name field
       let full_name = match_country_name(&self.country_name).unwrap_or(cc.clone());
       rows.push(GeoNameRow::new_with_country_name(self.lat, self.lng, cc, full_name, "PCLI".to_string(), 0));
-      if self.admin_name.len() > 0 {
-        rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), "ADM1".to_string(), 0));
+      let region = self.region.clone();
+      let mut has_region = false;
+      if self.region.len() > 0 {
+        rows.push(GeoNameRow::new_from_params(self.lat, self.lng, region.clone(), "ADM1".to_string(), 0));
+        has_region = true;
+      }
+      if self.admin_name.len() > 0 && self.admin_name != region {
+        let fcode = if has_region { "ADM2" } else { "ADM1" };
+        rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.admin_name.clone(), fcode.to_string(), 0));
       }
       rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.name.clone(), self.fcode.clone(), self.pop));
       rows
