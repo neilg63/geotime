@@ -35,6 +35,29 @@ pub async fn geo_time_info(params: Query<InputOptions>) -> impl Responder {
   Json(json!(info))
 }
 
+#[get("/geotz")]
+pub async fn geo_tz_info(params: Query<InputOptions>) -> impl Responder {
+  let mut coords_option = match_coords_from_params(&params);
+  let has_coords = coords_option.is_some();
+  if !has_coords { 
+    let tz_info_opt = extract_zone_name_from_place_params(&params).await;
+    if let Some((_tz_info, matched_coords)) = tz_info_opt {
+      coords_option = Some(matched_coords);
+    }
+  }
+  let coords = match coords_option {
+    Some(cs) => cs,
+    _ => Coords::zero()
+  };
+  let (corrected_dt, local) = match_datetime_from_params(&params);
+  let enforce_dst = params.dst.unwrap_or(1) > 0;
+  reset_override();
+  let adjusted_dt = if local { fetch_adjusted_date_str(coords.lat, coords.lng, &corrected_dt, enforce_dst).await } else { corrected_dt.clone() };
+
+  let info = fetch_geo_tz_info(coords.lat, coords.lng, &adjusted_dt, enforce_dst).await;
+  Json(json!(info))
+}
+
 #[get("/timezone")]
 pub async fn tz_info(params: Query<InputOptions>) -> impl Responder {
   let mut zn: String = params.zn.clone().unwrap_or("".to_string());
@@ -77,7 +100,7 @@ pub async fn nearby_info(params: Query<InputOptions>) -> impl Responder {
   let mut result = json!({"valid": false });
   if let Some(coords) = coords_option {
     let tolerance = params.fuzzy.unwrap_or(1) as f64;
-    if let Some(data) = match_toponym_proximity(coords.lat, coords.lng, tolerance) {
+    if let Some(data) = match_toponym_proximity(coords.lat, coords.lng, tolerance, true) {
       result = json!(data);
     }
   }

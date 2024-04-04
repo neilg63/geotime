@@ -283,14 +283,14 @@ pub fn extract_country_name(sql: String) -> Option<String> {
   None
 }
 
-pub fn fetch_geoname_toponym_rows(sql: String) -> Vec<GeoNameNearby> {
+pub fn fetch_geoname_toponym_rows(sql: String, add_country_name: bool) -> Vec<GeoNameNearby> {
   if let Ok(mut conn) = connect_mysql() {
     // from_row(distance: f64, lat: f64, lng: f64, name: &str, admin_name: &str, zn: &str, cc: &str, fcode: &str, pop: u32)
     // lng, lat, name, cc, admin_name, zone_name, fcode, population,
       let results = conn
       .query_map( sql,
           |(lat, lng, name, cc, region, admin_name, zn, fcode, population, distance)| {
-            GeoNameNearby::from_db_row(lat, lng, name, cc, region, admin_name, zn, fcode, population, distance )
+            GeoNameNearby::from_db_row(lat, lng, name, cc, region, admin_name, zn, fcode, population, distance, add_country_name)
           },
       );
       if let Ok(zones) = results {
@@ -323,7 +323,7 @@ pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality>
   rows
 }
 
-pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<GeoNameNearby> {
+pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64, add_country_name: bool) -> Option<GeoNameNearby> {
   let min_lng = lng - tolerance;
   let max_lng = lng + tolerance;
   let min_lat = lat - tolerance;
@@ -336,7 +336,7 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64) -> Option<Geo
     )
   ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP', 'AIRQ') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
   
-  let rows = fetch_geoname_toponym_rows(sql);
+  let rows = fetch_geoname_toponym_rows(sql, add_country_name); 
   rows.get(0).map(|row| row.to_owned())
 }
 
@@ -368,6 +368,8 @@ pub struct GeoNameNearby {
     #[serde(rename="adminName")]
     pub admin_name: String,
     pub region: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cc: Option<String>,
     #[serde(rename="countryName")]
     pub country_name: String,
     #[serde(rename="zoneName",skip_serializing_if = "Option::is_none")]
@@ -396,14 +398,18 @@ impl GeoNameNearby {
       pop,
       admin_name,
       region,
+      cc: None,
       country_name,
       zone_name: None
     }
   }
 
-  pub fn from_db_row(lat: f64, lng: f64, name: String, cc: String, region:String, admin_name: String, zn: String, fcode: String, pop: u32, distance: f64) -> GeoNameNearby {
+  pub fn from_db_row(lat: f64, lng: f64, name: String, cc: String, region:String, admin_name: String, zn: String, fcode: String, pop: u32, distance: f64, add_country_name: bool) -> GeoNameNearby {
     let admin_name = admin_name.to_string();
-    let country_name = correct_country_code(&cc);
+    let c_code = correct_country_code(&cc);
+    let c_name = if add_country_name { match_country_name(&c_code) } else { Some(c_code.clone()) };
+    let country_name = c_name.unwrap_or(c_code.clone());
+    let cc = if add_country_name { Some(c_code) } else { None };
     GeoNameNearby { 
         lng,
         lat,
@@ -414,6 +420,7 @@ impl GeoNameNearby {
         pop,
         admin_name,
         region,
+        cc,
         country_name,
         zone_name: Some(zn.to_string()),
     }
@@ -425,10 +432,10 @@ impl GeoNameNearby {
       let full_name = match_country_name(&self.country_name).unwrap_or(cc.clone());
       rows.push(GeoNameRow::new_with_country_name(self.lat, self.lng, cc, full_name, "PCLI".to_string(), 0));
       let region = self.region.clone();
-      let mut has_region = false;
-      if self.region.len() > 0 {
+      let has_region = self.region.len() > 0;
+      if has_region {
         rows.push(GeoNameRow::new_from_params(self.lat, self.lng, region.clone(), "ADM1".to_string(), 0));
-        has_region = true;
+
       }
       if self.admin_name.len() > 0 && self.admin_name != region {
         let fcode = if has_region { "ADM2" } else { "ADM1" };
@@ -469,6 +476,15 @@ pub struct GeoTimeInfo {
     placenames: Vec<GeoNameRow>,
     time: Option<TimeZone>,
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct GeoTimeZone {
+  #[serde(skip_serializing_if = "Option::is_none")]
+  place: Option<GeoNameNearby>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  time: Option<TimeZone>,
+}
+
 
 fn match_geonames_username() -> String {
   let args = Args::parse();
@@ -685,7 +701,7 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
 }
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
-  let nearby_row_opt = match_toponym_proximity(lat, lng, 1.25);
+  let nearby_row_opt = match_toponym_proximity(lat, lng, 1.25, false);
   let placenames = if let Some(nb_row) = nearby_row_opt.clone() {
     nb_row.to_rows()
   } else {
@@ -717,6 +733,24 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_d
   }
   GeoTimeInfo { 
     placenames,
+    time
+  }
+}
+
+pub async fn fetch_geo_tz_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeZone {
+  let place = match_toponym_proximity(lat, lng, 1.25, true);
+  let time: Option<TimeZone> = if let Some(nb_row) = place.clone() {
+    if let Some(zn) = nb_row.zone_name {
+      match_current_time_zone(&zn, utc_string, Some(lng), enforce_dst)
+    } else {
+      None
+    }
+  } else {
+    None
+  };
+
+  GeoTimeZone { 
+    place,
     time
   }
 }

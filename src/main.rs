@@ -42,6 +42,7 @@ async fn main()  -> std::io::Result<()> {
         .service(lookup_by_name)
         .service(lookup_by_locality_name)
         .service(nearby_info)
+        .service(geo_tz_info)
         .route("/{sec1}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}", web::get().to(route_not_found))
         .route("/{sec1}/{sec2}/{sec3}", web::get().to(route_not_found))
