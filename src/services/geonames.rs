@@ -267,7 +267,7 @@ pub fn fetch_locality_rows(sql: String) -> Vec<Locality> {
     }
 }
 
-pub fn extract_country_name(sql: String) -> Option<String> {
+pub fn extract_country_row(sql: String) -> Option<CountryRow> {
   if let Ok(mut conn) = connect_mysql() {
       let result = conn
         .query_map(sql, |(country_code, country_name)| {
@@ -275,10 +275,22 @@ pub fn extract_country_name(sql: String) -> Option<String> {
         },
       );
       if let Ok(rows) = result {
-        if let Some(row) = rows.get(0) {
-          return Some(row.country_name.to_owned());
-        }
+        return rows.get(0).map(|cr| cr.to_owned());
       }
+  }
+  None
+}
+
+pub fn extract_country_name(sql: String) -> Option<String> {
+  if let Some(row) = extract_country_row(sql) {
+    return Some(row.country_name.to_owned());
+  }
+  None
+}
+
+pub fn extract_country_code(sql: String) -> Option<String> {
+  if let Some(row) = extract_country_row(sql) {
+    return Some(row.country_code.to_owned());
   }
   None
 }
@@ -323,20 +335,26 @@ pub fn match_locality(text: &str, cc: &Option<String>, max: u8) -> Vec<Locality>
   rows
 }
 
-pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64, add_country_name: bool) -> Option<GeoNameNearby> {
-  let min_lng = lng - tolerance;
-  let max_lng = lng + tolerance;
-  let min_lat = lat - tolerance;
-  let max_lat = lat + tolerance;
-  let sql = format!("SELECT lat, lng, name, cc, region, admin_name, zone_name, fcode, population, (
+fn lat_lng_to_distance_sql_field(lat: f64, lng: f64) -> String {
+  format!("(
     6371 * acos(
       cos(radians({})) * cos(radians(x(g))) * cos(radians(y(g)) - radians({}))
       +
       sin(radians({})) * sin(radians(x(g)))
     )
-  ) AS distance FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP', 'AIRQ') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", lat, lng, lat, min_lat, max_lat, min_lng, max_lng);
+  ) AS distance", lat, lng, lat)
+}
+
+pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64, add_country_name: bool) -> Option<GeoNameNearby> {
+  let min_lng = lng - tolerance;
+  let max_lng = lng + tolerance;
+  let min_lat = lat - tolerance;
+  let max_lat = lat + tolerance;
+  let distance_field_sql = lat_lng_to_distance_sql_field(lat, lng);
+  let sql = format!("SELECT lat, lng, name, cc, region, admin_name, zone_name, fcode, population, {} FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ANS', 'AIRF', 'AIRP', 'AIRQ') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", distance_field_sql, min_lat, max_lat, min_lng, max_lng);
   
   let rows = fetch_geoname_toponym_rows(sql, add_country_name); 
+  
   rows.get(0).map(|row| row.to_owned())
 }
 
@@ -345,6 +363,11 @@ pub fn match_country_name(cc: &str) -> Option<String> {
   let sql = format!("select * FROM country WHERE country_code = '{}' LIMIT 1", code);
   
   extract_country_name(sql)
+}
+
+pub fn match_cc_from_country_name(c_name: &str) -> Option<String> {
+  let sql = format!("select * FROM country WHERE country_name LIKE '{}%' LIMIT 1", c_name);
+  extract_country_code(sql)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -426,6 +449,53 @@ impl GeoNameNearby {
     }
   }
 
+  pub fn from_places(places: &[GeoNameRow], date_str: &str) -> Option<Self> {
+    let num_places = places.len();
+    if num_places > 0 {
+      let best = places.last().unwrap().to_owned();
+      let name = best.name.as_str();
+      let fcode = best.fcode.as_str();
+      let mut admin_name = "";
+      let mut country_name = "";
+      let is_ocean = fcode == "OCEAN" || fcode == "SEA";
+      let mut pop = 0;
+      if !is_ocean {
+        pop = best.pop;
+      }
+      let mut cc: Option<String> = None;
+      if !is_ocean && num_places > 1 {
+        if let Some(item) = places.into_iter().find(|p| p.fcode.starts_with("ADM")) {
+          admin_name = item.name.as_str();
+        }
+        if let Some(item) = places.into_iter().find(|p| p.fcode.starts_with("PCLI")) {
+          country_name = item.name.as_str();
+          cc = match_cc_from_country_name(&country_name);
+        }
+      }
+      let mut zone_name: Option<String> = None;
+      if is_ocean {
+        let tz = TimeZone::new_ocean(name, best.lng, date_str);
+        zone_name = Some(tz.zone_name);
+      }
+      Some( GeoNameNearby { 
+        lng: best.lng,
+        lat: best.lat,
+        name: name.to_owned(),
+        toponym: name.to_owned(),
+        fcode: fcode.to_owned(),
+        distance: 0f64,
+        pop,
+        admin_name: admin_name.to_string(),
+        region: name.to_owned(),
+        cc,
+        country_name: country_name.to_string(),
+        zone_name,
+    })
+    } else {
+      None
+    }
+  }
+
   pub fn to_rows(&self) -> Vec<GeoNameRow> {
       let mut rows: Vec<GeoNameRow> = vec![];
       let cc = self.country_name.clone(); // country name is the code when it comes from toponyms is mapped to the name field
@@ -444,6 +514,7 @@ impl GeoNameNearby {
       rows.push(GeoNameRow::new_from_params(self.lat, self.lng, self.name.clone(), self.fcode.clone(), self.pop));
       rows
   }
+  
 }
 
 
@@ -455,8 +526,51 @@ pub struct TimeZoneInfo {
 
 impl TimeZoneInfo {
     pub fn new(row: Map<String, Value>) -> TimeZoneInfo {
-        let cc = extract_string_from_value_map(&row, "countryCode");
-        let tz = extract_string_from_value_map(&row, "timezoneId");
+        let mut cc = extract_string_from_value_map(&row, "countryCode");
+        let mut tz = extract_string_from_value_map(&row, "timezoneId");
+        if tz.len() < 3 {
+          let hrs_offset = extract_f64_from_value_map(&row, "gmtOffset");
+          let hrs_suffix = if hrs_offset % 1.0 == 0.0 {
+            format!("{:0}", hrs_offset.abs())
+          } else {
+            format!("{:2}", hrs_offset.abs())
+          };
+          let letter = if hrs_offset < 0.0 { "W" } else { "E" };
+          let lat = extract_f64_from_value_map(&row, "lat");
+          let lng = extract_f64_from_value_map(&row, "lng");
+          let mut zone_prefix = "";
+          if lat > 68.0  {
+            zone_prefix = "Arctic";
+          } else if lng > 150.0 || lng < -110.0 && lat > -60.0 && lat < 68.0 {
+            zone_prefix = if lat < 0.0 {
+              "South_Pacific"
+            } else {
+              "North_Pacific"
+            };
+          } else if lng < 15.0 && lng > -80.0 {
+            zone_prefix = if lat < 0.0 {
+              "South_Atlantic"
+            } else {
+              "North_Atlantic"
+            };
+          } else if lat > 20.0 && lng > 20.0 && lng > -60.0 && lat < 100.0 {
+            zone_prefix = "Indian";
+          } else if lat <= -60.0 {
+            zone_prefix = "Southern";
+          } else {
+            if lat > 30.0 && lng > -120.0 && lng < -60.0 {
+              zone_prefix = "North_America";
+            } else {
+              zone_prefix = if lat < 0.0 {
+                "Southern_Hemisphere"
+              } else {
+                "Northern_Hemisphere"
+              };
+            }
+          }
+          tz = format!("{}/{}{}", zone_prefix, hrs_suffix, letter);
+          cc = "-".to_string();
+        }
         TimeZoneInfo { 
             cc,
             tz
@@ -637,7 +751,6 @@ pub async fn fetch_nearby_from_geonames(lat: f64, lng: f64) -> Vec<GeoNameRow> {
 
 pub async fn fetch_tz_from_geonames(lat: f64, lng: f64) -> Option<TimeZoneInfo> {
   let data = fetch_from_geonames("timezoneJSON", lat, lng).await;
-
   match data {
       Some(item_data) => {
         let tz_data = TimeZoneInfo::new(item_data);
@@ -701,7 +814,10 @@ pub fn extract_time_from_first_row(placenames: &Vec<GeoNameRow>, lng: f64, utc_s
 }
 
 pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeInfo {
-  let nearby_row_opt = match_toponym_proximity(lat, lng, 1.25, false);
+  let mut nearby_row_opt = match_toponym_proximity(lat, lng, 1.25, false);
+  if nearby_row_opt.is_none() {
+    nearby_row_opt = match_toponym_proximity(lat, lng, 2.5, false);
+  }
   let placenames = if let Some(nb_row) = nearby_row_opt.clone() {
     nb_row.to_rows()
   } else {
@@ -737,9 +853,22 @@ pub async fn fetch_geo_time_info(lat: f64, lng: f64, utc_string: &str, enforce_d
   }
 }
 
+fn is_in_ocean_zone(lat: f64, lng: f64) -> bool {
+  if (lng > 150.0 && lng < -130.0) || (lng > -50.0 && lng > 10.0) {
+    true
+  } else if lat < 20.0 && lng > 40.0 && lng < 110.0 {
+    true
+  } else {
+    false
+  }
+}
+
 pub async fn fetch_geo_tz_info(lat: f64, lng: f64, utc_string: &str, enforce_dst: bool) -> GeoTimeZone {
-  let place = match_toponym_proximity(lat, lng, 1.25, true);
-  let time: Option<TimeZone> = if let Some(nb_row) = place.clone() {
+  let mut place = match_toponym_proximity(lat, lng, 1.25, true);
+  if place.is_none() && !is_in_ocean_zone(lat, lng) {
+    place = match_toponym_proximity(lat, lng, 3.0, true);
+  }
+  let mut time: Option<TimeZone> = if let Some(nb_row) = place.clone() {
     if let Some(zn) = nb_row.zone_name {
       match_current_time_zone(&zn, utc_string, Some(lng), enforce_dst)
     } else {
@@ -748,7 +877,19 @@ pub async fn fetch_geo_tz_info(lat: f64, lng: f64, utc_string: &str, enforce_dst
   } else {
     None
   };
-
+  if place.is_none() {
+    let placenames = fetch_extended_from_geonames(lat, lng).await;
+    place = GeoNameNearby::from_places(&placenames, utc_string);
+    if let Some(pl) = place.clone() {
+      if let Some(zn) = pl.zone_name.clone() {
+        time = match_current_time_zone(&zn, utc_string, Some(lng), enforce_dst);
+      } else {
+        if let Some(tz_item) = fetch_tz_from_geonames(lat, lng).await {
+          time = match_current_time_zone(&tz_item.tz, utc_string, Some(lng), enforce_dst);
+        }
+      }
+    }
+  }
   GeoTimeZone { 
     place,
     time

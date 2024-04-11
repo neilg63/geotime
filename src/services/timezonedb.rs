@@ -4,6 +4,7 @@ use crate::app::weekday_code::WeekdayCode;
 use crate::data::mysql::*;
 use crate::app::date_conv::*;
 use chrono::Datelike;
+use string_patterns::{PatternMatch, PatternReplace};
 
 struct OffsetOverride {
   value: Option<i32>
@@ -77,6 +78,7 @@ impl TimeZone {
     let gmt_offset_hours = natural_hours_offset_from_utc(lng);
     let letter = if lng < 0f64 { "W" } else { "E" };
     let hours = gmt_offset_hours.abs();
+    let name = name.to_string().pattern_replace_ci(r#"\s+ocean$"#, "").pattern_replace_ci(r#"\s+"#, "_");
     let zone_name = format!("{}/{:02}{}", name, hours, letter);
     let gmt_offset = gmt_offset_hours * 3600i32;
     let unix_ts = iso_string_to_datetime(date_str).timestamp();
@@ -231,7 +233,15 @@ fn build_natural_timezone(zn: &str, date_str: &str, lng: f64, cc: String) -> Opt
   let is_before_1900 = year < 1900i32;
   let abbr = if is_before_1900 { "SOL" } else { "LOC" };
   let solar_utc_offset = natural_tz_offset_from_utc(lng);
-  let gmt_offset_hours = if is_before_1900 {solar_utc_offset } else { natural_hours_offset_from_utc(lng) };
+  let mut gmt_offset_hours = if is_before_1900 {solar_utc_offset } else { natural_hours_offset_from_utc(lng) };
+  if zn.pattern_match_cs(r#"/\d+(\.\d+)?(E|W)?$"#) {
+    if let Some(last) = zn.split("/").last() {
+      if let Ok(hrs) = last.to_string().pattern_replace_ci("[^0-9.]", "").parse::<f64>() {
+        let direction = if last.ends_with("W") { -1.0 } else { 1.0 };
+        gmt_offset_hours = (direction * hrs * 3600.0) as i32;
+      }
+    }
+  }
   let mut tz_info = TimeZone::new(zn.to_string(), cc, abbr.to_string(), dt.timestamp(), gmt_offset_hours, false );
   tz_info.set_natural_offset(lng);
   Some(tz_info)

@@ -1,5 +1,5 @@
 use crate::app::weekday_code::WeekdayCode;
-use chrono::{NaiveDateTime};
+use chrono::NaiveDateTime;
 use julian_day_converter::*;
 
 pub enum JulianDayEpoch {
