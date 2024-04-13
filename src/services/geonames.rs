@@ -351,7 +351,7 @@ pub fn match_toponym_proximity(lat: f64, lng: f64, tolerance: f64, add_country_n
   let min_lat = lat - tolerance;
   let max_lat = lat + tolerance;
   let distance_field_sql = lat_lng_to_distance_sql_field(lat, lng);
-  let sql = format!("SELECT lat, lng, name, cc, region, admin_name, zone_name, fcode, population, {} FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ADM2', 'ANS', 'AIRF', 'AIRP', 'AIRQ') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", distance_field_sql, min_lat, max_lat, min_lng, max_lng);
+  let sql = format!("SELECT lat, lng, name, cc, region, admin_name, zone_name, fcode, population, {} FROM toponyms WHERE fcode NOT IN ('PCLI', 'ADM1', 'ADM2', 'ANS', 'AIRF', 'AIRP', 'AIRQ', 'AIRB') AND lat BETWEEN {} and {} AND lng BETWEEN {} AND {} ORDER BY distance LIMIT 1", distance_field_sql, min_lat, max_lat, min_lng, max_lng);
   
   let rows = fetch_geoname_toponym_rows(sql, add_country_name); 
   
