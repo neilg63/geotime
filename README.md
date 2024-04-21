@@ -1,5 +1,7 @@
 # GeoTimeZone: Timezone data for any land location since 1900
 
+A preview of some of the features is available at [GeoTimeZone service](https://geotimezone.multifaceted.info/).
+
 This server application uses the open source time zone database and Geonames service to match any latitude, longitude and date since approximately 1900. However, the earliest time zone records vary considerably from place to place. Data is available for most of Europe, the Americas, Australia and many regions under European colonial control since at least 1900 and in some countries much earlier, e.g. 1835 for the Netherlands or 1847 for the UK, but there are many gaps in available records before 1930. When time zone data cannot be matched, standardised natural time zones to the nearest hour are used after 1900 (abbreviation LOC) and only local solar time before 1900 (abbreviation SOL).
 
 ## What problem does GeoTimeZone solve?
@@ -25,7 +27,8 @@ Exit the mysql prompt and import the SQL file as follows:
 ```
 mysql -u timezonedb -pmy_cryptic_password timezonedb < time_zone.sql
 ```
-I bundled a timezone database with the *time_zone* and *country* tables plus a *cities* lookup table from GeoNames for the localities endpoint
+
+I bundled a timezone database with the _time_zone_ and _country_ tables plus a _cities_ lookup table from GeoNames for the localities endpoint
 
 ## Environment Variables
 
